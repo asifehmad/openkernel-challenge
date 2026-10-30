@@ -1,0 +1,19 @@
+{
+  "status": "Secondary-source snapshot; live official site blocked by proxy HTTP403. Not authenticated against current official task.",
+  "source_repository": "https://github.com/Xuefeng-Zhu/open-kernel-challenge",
+  "source_commit": "5372a758c7d4c03431ed4887f75dfb7d5e53aa1b",
+  "source_directory": "official",
+  "claimed_primary_download_utc": "2026-10-24T06:41:11.761566+00:00",
+  "primary_url": "https://openkernelchallenge.dev/api/v1/problems/muse_bf16_proj",
+  "corroborating_repository": "https://github.com/lilaclilac09/open-kernel-challenge",
+  "corroborating_commit": "d9bdcc9f01dff1018f2f256a0a1a63911a16557e",
+  "files_sha256": {
+    "AGENTS.md": "d6f3fb0cedb7cfac9aaef929c5ec2999eba5e1103cc3fa240f49de4e732e21fc",
+    "TASK.md": "deb9118fa75cbc03c2ebd16b283e72a0314168d40299fa7501373eb1960a2bc4",
+    "baseline.py": "39f52ea5b65505958aa9dee9c8129dd394cbba4e670046f862b5a88ce91a0574",
+    "reference.py": "e62491abc9ddcad33f5faba8b0ee74cf6370b7be5dd2dc05031742f3ebf7147d",
+    "checks.py": "9a046c3c38db28b325dcd1557baecdf6bc9ef941d2175f9a900ba4c230bb8055"
+  },
+  "license_file": "third_party/okc_snapshot/LICENSE",
+  "modifications": "None. No competitor submission code copied."
+}
