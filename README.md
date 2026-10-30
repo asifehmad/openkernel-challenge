@@ -73,9 +73,12 @@ exists. To diagnose against the included **historical snapshot**, pass
 `--only-layer` / `--only-m` are diagnostic runs with no aggregate score.
 
 The benchmark requires SGLang and a CUDA GPU, checks the nine prerequisite cases
-and every timed input, alternates baseline/candidate graph replays, reads a
-buffer larger than L2 before each timing, records raw/overhead-corrected timings,
-and computes weighted load ratios. It is a **local approximation** of the judge,
+and every timed input, alternates baseline/candidate graph replays, and captures
+external timing events and the payload in one graph to avoid host launch gaps.
+It reads a buffer larger than L2 before the start event and requires SGLang A/A
+calibration before and after each shape. Raw intervals are the default;
+experimental empty-interval corrections and all raw samples remain available.
+It computes weighted load ratios and is a **local approximation** of the judge,
 not a substitute for official validation. Inspect raw timings and repeat full
 runs; do not claim improvements smaller than noise.
 
@@ -83,7 +86,14 @@ runs; do not claim improvements smaller than noise.
 baseline. The FP64 router control is deliberately conservative and slow.
 Neither our runner nor setup scripts call `okc check`, `okc submit`, or accept
 competition terms. A person must handle account/rules acceptance; official
-submission requires explicit approval.
+checks and submissions each require explicit approval.
+
+The follow-up [audit](docs/audit.md) adds metadata bounds checks and explicit
+`single_pass_kernel_fn` / `gemv_kernel_fn` experiment entry points. Default
+dispatch and large-M PyTorch behavior remain unchanged. Current CPU validation:
+28 tests passed, 3 native BF16-dot interpreter tests skipped, 600 reduced CPU
+cases passed across the three candidate entry points, and 56 SM90
+specializations compiled offline. See [validation](docs/validation.md).
 
 ## Current limitations
 

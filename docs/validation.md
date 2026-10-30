@@ -1,5 +1,33 @@
 # Phase A validation record
 
+## Follow-up audit validation
+
+On the same CPU environment, the follow-up audit executed:
+
+- Full test suite: **28 passed, 3 skipped**. The skips are the native BF16
+  single-pass GEMM, split-K GEMM and router-dot interpreter cases on Triton 3.6.0.
+- **600 reduced-size CPU cases passed**: 200 each for `kernel_fn`,
+  `single_pass_kernel_fn`, and `gemv_kernel_fn`, seed 94017. These use the CPU
+  fallback; the alternatives' native GPU routes remain unrun.
+- `python scripts/compile_kernels.py --all-shapes`: **56 distinct SM90
+  specializations compiled offline**, including the scored/custom paths and
+  published special-case custom paths. Compiler output saved locally under
+  ignored `benchmarks/results/offline-compile-audit.json`.
+- `ruff check` and Python compilation passed. Shell syntax checks passed.
+- Single-file packaging tested by copying only submission.py into a temporary
+  directory and importing/calling it in `python -I` with installed dependencies.
+- All five preserved task/check/baseline snapshot hashes still match provenance.
+- Synthetic A/A tests check bias/noise rejection, correction sensitivity and
+  raw-vs-corrected accounting. **No A/A GPU calibration has run**.
+
+The first H200 workflow, external CUDA event timing/capture, full-shape numerical
+tests, SGLang, native BF16 tensor cores, and GPU performance all remain pending.
+Direct official-source access still returns proxy HTTP 403; CLI installation,
+authentication, official versions and fresh hashes remain blocked. No official
+check quota or submission was used. See [audit](audit.md).
+
+## Original Phase A checks (historical)
+
 Executed on 2026-10-30 on a CPU-only x86_64 cloud machine. Python 3.12.14,
 PyTorch 2.10.0+cpu, Triton 3.6.0, NumPy 2.2.6, pytest 8.4.2, ruff 0.14.2.
 No NVIDIA device, nvcc, Nsight Compute or SGLang was present.

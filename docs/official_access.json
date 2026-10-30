@@ -1,0 +1,36 @@
+{
+  "observed_utc": "2026-10-30T13:45:54Z",
+  "primary_verified": false,
+  "cli_installed": false,
+  "cli_version": null,
+  "authentication_attempted": false,
+  "token_binding_present": false,
+  "official_checks_used": 0,
+  "official_submissions_used": 0,
+  "endpoints": [
+    {
+      "url": "https://openkernelchallenge.dev/",
+      "result": "HTTP403 from egress proxy during CONNECT; no origin response or body obtained"
+    },
+    {
+      "url": "https://openkernelchallenge.dev/install.sh",
+      "result": "HTTP403 from egress proxy during CONNECT; no origin response or body obtained"
+    },
+    {
+      "url": "https://openkernelchallenge.dev/api/v1/problems/muse_bf16_proj",
+      "result": "HTTP403 from egress proxy during CONNECT; no origin response or body obtained"
+    }
+  ],
+  "diagnosis": "Saved draft contains openkernelchallenge.dev. Explicit network permission granted and elevated installer request also403. Applying draft domain to running environment remains required; no access-policy bypass attempted.",
+  "fetched_primary_hashes": null,
+  "unchanged_secondary_file_hashes": {
+    "TASK.md": "deb9118fa75cbc03c2ebd16b283e72a0314168d40299fa7501373eb1960a2bc4",
+    "AGENTS.md": "d6f3fb0cedb7cfac9aaef929c5ec2999eba5e1103cc3fa240f49de4e732e21fc",
+    "baseline.py": "39f52ea5b65505958aa9dee9c8129dd394cbba4e670046f862b5a88ce91a0574",
+    "reference.py": "e62491abc9ddcad33f5faba8b0ee74cf6370b7be5dd2dc05031742f3ebf7147d",
+    "checks.py": "9a046c3c38db28b325dcd1557baecdf6bc9ef941d2175f9a900ba4c230bb8055"
+  },
+  "rules_version": null,
+  "leaderboard_verified": false,
+  "daily_limits_verified": false
+}

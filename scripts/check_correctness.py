@@ -57,6 +57,8 @@ def main():
     p.add_argument("--device", choices=["cpu", "cuda"], default="cuda")
     p.add_argument("--backend", choices=["submission", "torch"], default="submission")
     p.add_argument("--submission", type=Path, default=ROOT / "muse_bf16_proj/submission.py")
+    p.add_argument("--entry-point", choices=["kernel_fn", "torch_kernel_fn", "single_pass_kernel_fn", "gemv_kernel_fn"],
+                   default="kernel_fn", help="Explicit candidate path; none is the official SGLang baseline")
     p.add_argument("--official-dir", type=Path, help="untouched current okc init task files")
     p.add_argument("--seeds", type=int, nargs="+", default=[94017, 173629, 812347])
     p.add_argument("--quick", action="store_true", help="reduced 32x64 weights, NEVER official validation")
@@ -84,7 +86,7 @@ def main():
         oracle = load_module(directory / "reference.py", "okc_local_reference")
     if args.backend == "submission":
         candidate = load_module(args.submission, "candidate_correctness")
-        prepare, run = candidate.prepare, candidate.kernel_fn
+        prepare, run = candidate.prepare, getattr(candidate, args.entry_point)
     else:
         # Independent FP32 matmul, distinct from FP64 reference.
         def prepare(weights):
@@ -94,13 +96,15 @@ def main():
             out = data["x"].float() @ state[cfg["layer"]][:cfg["n"]].float().T
             return out.to(torch.float32 if cfg["layer"] == "router" else torch.bfloat16)
     if args.quick:
-        cases = [(m, layer, dist) for layer in contract.LAYERS for m in (1, 8, 9, 33)
+        cases = [(m, layer, dist) for layer in contract.LAYERS for m in (1, 7, 8, 9, 16, 31, 32, 33)
                  for dist in ("normal", "zero", "signed", "outliers", "probes")]
     else:
         cases = list(contract.SPECIAL_CASES)
         cases += [(s["m"], s["layer"], "normal") for s in contract.configurations()]
         cases += [(m, layer, "normal") for layer in contract.LAYERS for m in (2, 7, 9, 31, 33, 127, 129, 255, 257)]
-        cases += [(8, layer, dist) for layer in contract.LAYERS for dist in ("zero", "signed", "probes")]
+        cases += [(m, layer, dist) for layer in contract.LAYERS
+                  for m in (1, 7, 8, 9, 16, 31, 32, 33, 128, 256)
+                  for dist in ("zero", "signed", "probes", "outliers")]
         cases = list(dict.fromkeys(cases))
     results = []
     qualification = ("REDUCED CPU/local checks" if args.quick else
@@ -150,6 +154,12 @@ def main():
                     valid, msg = oracle.check_implementation(data, graph_output, weights)
                     if not valid:
                         raise AssertionError("fresh graph replay: " + msg)
+                    # The captured buffer may be reused by its own replays, but
+                    # an unrelated eager call must not overwrite that output.
+                    retained_graph_output = graph_output.clone()
+                    run(fresh, state)
+                    if not torch.equal(graph_output, retained_graph_output):
+                        raise AssertionError("eager call overwrote a captured graph output")
                     row["graph"] = "pass"
                 else:
                     row["graph"] = "unrun (CPU)"
@@ -160,6 +170,8 @@ def main():
             print(f"{row['status'].upper()} seed={seed} {layer} m={m} {dist}: {row['detail']}", flush=True)
     failures = sum(row["status"] == "fail" for row in results)
     report = {"qualification": qualification, "official_service_run": False,
+              "official_check_run": False, "official_submission_run": False,
+              "candidate_entry_point": args.entry_point if args.backend == "submission" else "local_fp32_torch_control",
               "official_file_hashes": official_hashes, "quick": args.quick, "device": args.device,
               "backend": args.backend, "submission_sha256": hashlib.sha256(args.submission.read_bytes()).hexdigest() if args.backend == "submission" else None,
               "passed": len(results) - failures, "failed": failures, "cases": results}

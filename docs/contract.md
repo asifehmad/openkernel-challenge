@@ -1,5 +1,14 @@
 # Provisional challenge contract
 
+Follow-up audit: direct installer/API/site access still fails at the proxy
+CONNECT step even after explicit network permission and elevated execution.
+No current official rule version, CLI version, daily quota, leaderboard result
+or primary file hash has been verified. All five preserved starter hashes still
+match `muse_bf16_proj/PROVENANCE.json`; no live discrepancy can be established.
+See [access evidence](official_access.json) and [audit findings](audit.md).
+`scripts/compare_official.py` provides a non-destructive six-file hash comparison
+once a current bundle can be downloaded through the official CLI.
+
 The repository preserves the mirrored starter `muse_bf16_proj/TASK.md`, `AGENTS.md`, `baseline.py`, `reference.py` and `checks.py` without changing their contents. They are usable for local development, but they are **secondary snapshots**, not directly authenticated current organizer downloads. See the accompanying provenance files and `third_party/okc_snapshot/LICENSE`. Official website access returned proxy HTTP 403; refresh with official `okc init muse_bf16_proj` and read the current full rules before declaring submission readiness.
 
 ## Source identity

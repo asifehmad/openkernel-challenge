@@ -13,6 +13,11 @@
 
 ## Before H200 measurements
 
+Completed locally: isolated-file CPU packaging, metadata/bounds validation,
+single-pass/GEMV comparison entry points, 28 passing tests (3 explicitly skipped),
+600 reduced CPU checks and 56 offline SM90 compilations. These do not satisfy
+any GPU gate below. See [audit](audit.md) and [validation](validation.md).
+
 - [ ] Obtain access to an NVIDIA H200 SXM and confirm compute/runtime support.
 - [ ] Record the immutable official image digest and all relevant tool versions.
 - [ ] Fetch the current task through official `okc init`; confirm file hashes, full rules, memory/preparation caps, available dependencies and leaderboard.
@@ -26,6 +31,7 @@
 ## Before claiming a performance result
 
 - [ ] Benchmark actual supplied SGLang baseline and candidate on the same GPU, with paired graph trials and a cold-cache protocol.
+- [ ] Run `--aa-only` and pass per-shape SGLang A/A gates; validate external-event capture and correction sensitivity on the actual image.
 - [ ] Retain raw samples, repeated-capture outcomes, A/A control, timing-overhead treatment and environment/source metadata.
 - [ ] Review all 30 per-shape comparisons and six weighted load totals; use the geometric-mean load score.
 - [ ] Clearly label local figures as provisional rather than official judge scores.
@@ -37,6 +43,7 @@
 - [ ] User has personally accepted current rules through the official login flow and supplied credentials securely if needed.
 - [ ] Current permitted dependencies, file-size/memory/preparation/runtime limits and licenses are satisfied.
 - [ ] Official checks passed on the exact final file; record job/result provenance separately from local runs.
+- [ ] User explicitly approves any use of official check quota before it is consumed.
 - [ ] Final file begins with `# okc: problem=muse_bf16_proj` and is self-contained.
 - [ ] Exact final file SHA256 and tested Git commit are recorded; no later unvalidated edits.
 - [ ] Repository contains no credentials, private keys, model weights, binaries or benchmark caches.
