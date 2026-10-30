@@ -78,6 +78,26 @@ if triton is not None:
                  (mi[:, None] < M) & (ni[None, :] < N))
 
     @triton.jit
+    def _single_gemm(X, W, Y, M: tl.constexpr, N: tl.constexpr, K: tl.constexpr,
+                     XM: tl.constexpr, XK: tl.constexpr, WN: tl.constexpr, WK: tl.constexpr,
+                     BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
+        # One CTA owns the entire K reduction for an output tile. This removes
+        # split-K scratch/reduction traffic but can expose less parallelism.
+        mi = tl.program_id(0) * BM + tl.arange(0, BM)
+        ni = tl.program_id(1) * BN + tl.arange(0, BN)
+        kk = tl.arange(0, BK)
+        acc = tl.full((BM, BN), 0, tl.float32)
+        for chunk in range(tl.cdiv(K, BK)):
+            k = chunk * BK + kk
+            a = tl.load(X + mi[:, None] * XM + k[None, :] * XK,
+                        (mi[:, None] < M) & (k[None, :] < K), 0)
+            b = tl.load(W + ni[None, :] * WN + k[:, None] * WK,
+                        (ni[None, :] < N) & (k[:, None] < K), 0)
+            acc = tl.dot(a, b, acc)
+        tl.store(Y + mi[:, None] * N + ni[None, :], acc,
+                 (mi[:, None] < M) & (ni[None, :] < N))
+
+    @triton.jit
     def _finish_split(P, Y, SIZE: tl.constexpr, SPLIT: tl.constexpr, B: tl.constexpr):
         i = tl.program_id(0) * B + tl.arange(0, B)
         acc = tl.full((B,), 0, tl.float32)
@@ -109,6 +129,12 @@ if triton is not None:
 
 
 def prepare(weights: Weights) -> dict[str, Any]:
+    # Metadata checks only; no reads of tensor contents or host synchronization.
+    for layer in ("qkv_gate", "o", "pooler", "unpooler", "router"):
+        weight = weights[layer]
+        dtype = torch.float32 if layer == "router" else torch.bfloat16
+        if weight.ndim != 2 or weight.dtype != dtype:
+            raise ValueError(f"{layer} weights must be a 2D {dtype} tensor")
     state: dict[str, Any] = {key: value.contiguous() for key, value in weights.items()}
     router = state["router"]
     hi = router.to(torch.bfloat16)
@@ -117,27 +143,47 @@ def prepare(weights: Weights) -> dict[str, Any]:
     return state
 
 
+def _checked_inputs(data: Inputs, state: dict[str, Any]):
+    """Validate metadata before a raw-pointer launch; never inspect data values."""
+    x, cfg = data["x"], data["config"]
+    m, n, k, layer = cfg["m"], cfg["n"], cfg["k"], cfg["layer"]
+    if layer not in ("qkv_gate", "o", "pooler", "unpooler", "router"):
+        raise ValueError("unknown projection layer")
+    if any(not isinstance(size, int) or isinstance(size, bool) or size <= 0 for size in (m, n, k)):
+        raise ValueError("m, n, k must be positive integers")
+    w = state[layer]
+    dtype = torch.float32 if layer == "router" else torch.bfloat16
+    if x.ndim != 2 or x.shape != (m, k) or x.dtype != torch.bfloat16:
+        raise ValueError("activation shape/dtype does not match BF16 [m, k]")
+    if w.ndim != 2 or w.shape[1] != k or n > w.shape[0] or w.dtype != dtype:
+        raise ValueError("weight shape/dtype does not contain the requested [n, k] slice")
+    if x.device != w.device:
+        raise ValueError("activation and weights must share a device")
+    return x, w, m, n, k, layer
+
+
 def torch_kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
     """Conservative development control; not the SGLang competition baseline.
 
     FP64 router fallback avoids depending on global TF32 settings. This route
     is for correctness/control, not a proposed fast GPU-router implementation.
     """
-    x, cfg = data["x"], data["config"]
-    w = state[cfg["layer"]][:cfg["n"]]
-    if cfg["layer"] == "router":
+    x, w, _, n, _, layer = _checked_inputs(data, state)
+    w = w[:n]
+    if layer == "router":
         return (x.double() @ w.double().T).float()
     return x @ w.T
 
 
-def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    x, cfg = data["x"], data["config"]
-    m, n, k, layer = cfg["m"], cfg["n"], cfg["k"], cfg["layer"]
+def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> torch.Tensor:
+    x, w, m, n, k, layer = _checked_inputs(data, state)
     if triton is None or not x.is_cuda:
         return torch_kernel_fn(data, state)
-    w = state[layer]
     # Dispatch depends only on public shapes and layer metadata.
-    if m == 1 or (layer == "router" and m <= 8):
+    use_gemv = (layer == "router" and m <= 8) or (
+        layer != "router" and ((small_m_strategy == "default" and m == 1) or
+                                (small_m_strategy == "gemv" and m <= 32)))
+    if use_gemv:
         out = torch.empty((m, n), device=x.device, dtype=w.dtype)
         _gemv[(triton.cdiv(n, 4), m)](
             x, w, out, n, k, x.stride(0), x.stride(1), w.stride(0), w.stride(1),
@@ -150,6 +196,12 @@ def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
             x.stride(0), x.stride(1), BM=16, BN=32, BK=64, num_warps=4)
         return out
     if m <= 32:
+        if small_m_strategy == "single_pass":
+            out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
+            _single_gemm[(triton.cdiv(m, 16), triton.cdiv(n, 64))](
+                x, w, out, m, n, k, x.stride(0), x.stride(1), w.stride(0), w.stride(1),
+                BM=16, BN=64, BK=64, num_warps=4)
+            return out
         split = 4 if k >= 4096 else 2
         partial = torch.empty((split, m, n), device=x.device, dtype=torch.float32)
         out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
@@ -159,3 +211,26 @@ def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
         _finish_split[(triton.cdiv(m * n, 256),)](partial, out, m*n, split, B=256)
         return out
     return x @ w[:n].T
+
+
+def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
+    """Original candidate routing, preserved until H200 measurements exist."""
+    return _dispatch(data, state, "default")
+
+
+def single_pass_kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
+    """Local experiment: one GEMM launch for BF16 M<=32, including M=1.
+
+    Router behavior and large-M library fallback match kernel_fn. Selection is
+    explicit in the local harness; the evaluator continues to call kernel_fn.
+    """
+    return _dispatch(data, state, "single_pass")
+
+
+def gemv_kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
+    """Local experiment: per-token GEMV for BF16 M<=32. May reread weights M times.
+
+    This is a measured-comparison candidate, not a claim that GEMV wins at M>1.
+    Router behavior and large-M library fallback match kernel_fn.
+    """
+    return _dispatch(data, state, "gemv")

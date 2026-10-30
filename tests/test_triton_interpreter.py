@@ -55,13 +55,27 @@ def _worker(case):
 
     if case == "gemv":
         for dtype, layer in ((torch.bfloat16, "o"), (torch.float32, "router")):
-            m, n, k = 3, 7, 73
-            x, w = inputs(m, n, k, dtype)
-            y = torch.full((m, n), float("nan"), dtype=dtype)
-            candidate._gemv[(triton.cdiv(n, 4), m)](
-                x, w, y, n, k, x.stride(0), x.stride(1), w.stride(0), w.stride(1),
-                BN=4, BK=64, num_warps=4)
-            check(x, w, y, layer)
+            for distribution in ("normal", "outliers", "zero", "signed", "probes"):
+                m, n, k = 9, 7, 73
+                x, w = inputs(m, n + 6, k, dtype)
+                if distribution == "outliers":
+                    x[:, 3] *= 32
+                elif distribution == "zero":
+                    x.zero_()
+                elif distribution == "signed":
+                    x.sign_()
+                elif distribution == "probes":
+                    x.zero_()
+                    for row in range(m):
+                        x[row, (row * 7) % k] = 32 if row % 2 else -64
+                guard = torch.full((m*n + 8,), -123, dtype=dtype)
+                y = guard[4:-4].view(m, n)
+                candidate._gemv[(triton.cdiv(n, 4), m)](
+                    x, w, y, n, k, x.stride(0), x.stride(1), w.stride(0), w.stride(1),
+                    BN=4, BK=64, num_warps=4)
+                check(x, w[:n], y, layer)
+                if not bool((guard[:4] == -123).all() & (guard[-4:] == -123).all()):
+                    raise AssertionError("GEMV wrote outside the output slice")
     elif case in {"split_gemm", "split_gemm_bf16"}:
         m, n, k = 19, 37, 151
         x, w = inputs(m, n, k, torch.bfloat16)
@@ -80,6 +94,19 @@ def _worker(case):
             candidate._finish_split[(triton.cdiv(m*n, 128),)](
                 partial, y, m*n, split, B=128)
             check(x, w, y, "o")
+    elif case in {"single_gemm", "single_gemm_bf16"}:
+        for m, n, k in ((1, 7, 73), (8, 13, 97), (19, 37, 151), (32, 13, 19)):
+            x, w = inputs(m, n + 5, k, torch.bfloat16)
+            if case == "single_gemm":
+                x, w = x.float(), w.float()
+            guard = torch.full((m*n + 8,), -123, dtype=torch.bfloat16)
+            y = guard[4:-4].view(m, n)
+            candidate._single_gemm[(triton.cdiv(m, 16), triton.cdiv(n, 32))](
+                x, w, y, m, n, k, x.stride(0), x.stride(1), w.stride(0), w.stride(1),
+                BM=16, BN=32, BK=32, num_warps=4)
+            check(x, w[:n], y, "unpooler")
+            if not bool((guard[:4] == -123).all() & (guard[-4:] == -123).all()):
+                raise AssertionError("single-pass GEMM wrote outside the output slice")
     elif case in {"router_pair", "router_pair_bf16"}:
         m, n, k = 19, 37, 151
         x, w = inputs(m, n, k, torch.float32)
@@ -116,6 +143,8 @@ class InterpreterTests(unittest.TestCase):
     def test_router_pair_indexing_with_widened_bf16(self):
         self.run_case("router_pair")
 
+    def test_single_gemm_indexing_slices_with_widened_bf16(self):
+        self.run_case("single_gemm")
 
     def require_bf16_dot_support(self):
         import triton
@@ -129,6 +158,10 @@ class InterpreterTests(unittest.TestCase):
     def test_native_bf16_router_pair_interpreter(self):
         self.require_bf16_dot_support()
         self.run_case("router_pair_bf16")
+
+    def test_native_bf16_single_gemm_interpreter(self):
+        self.require_bf16_dot_support()
+        self.run_case("single_gemm_bf16")
 
 
 if __name__ == "__main__":
