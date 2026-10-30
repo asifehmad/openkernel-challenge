@@ -95,17 +95,7 @@ def main():
             cfg = data["config"]
             out = data["x"].float() @ state[cfg["layer"]][:cfg["n"]].float().T
             return out.to(torch.float32 if cfg["layer"] == "router" else torch.bfloat16)
-    if args.quick:
-        cases = [(m, layer, dist) for layer in contract.LAYERS for m in (1, 7, 8, 9, 16, 31, 32, 33)
-                 for dist in ("normal", "zero", "signed", "outliers", "probes")]
-    else:
-        cases = list(contract.SPECIAL_CASES)
-        cases += [(s["m"], s["layer"], "normal") for s in contract.configurations()]
-        cases += [(m, layer, "normal") for layer in contract.LAYERS for m in (2, 7, 9, 31, 33, 127, 129, 255, 257)]
-        cases += [(m, layer, dist) for layer in contract.LAYERS
-                  for m in (1, 7, 8, 9, 16, 31, 32, 33, 128, 256)
-                  for dist in ("zero", "signed", "probes", "outliers")]
-        cases = list(dict.fromkeys(cases))
+    cases = contract.validation_cases(args.quick)
     results = []
     qualification = ("REDUCED CPU/local checks" if args.quick else
                      "LOCAL execution using supplied task checker (verify provenance)" if args.official_dir else

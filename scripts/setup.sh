@@ -13,7 +13,8 @@ case "$mode" in
     ;;
   gpu)
     # Run INSIDE the official image. Preserve its coupled torch/CUDA/sglang.
-    python3 -m pip install -r requirements-dev.txt
+    # GPU runners use only the image packages and Python's standard library.
+    # Do not install CPU dev pins (especially NumPy) over evaluation packages.
     python3 scripts/verify_environment.py --require-h200
     ;;
   *) echo 'usage: scripts/setup.sh cpu|gpu' >&2; exit 2 ;;

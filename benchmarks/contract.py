@@ -28,6 +28,18 @@ def configurations():
     return scored_shapes()
 
 
+def validation_cases(quick=False):
+    if quick:
+        return [(m, layer, dist) for layer in LAYERS for m in (1, 7, 8, 9, 16, 31, 32, 33)
+                for dist in ("normal", "zero", "signed", "outliers", "probes")]
+    cases = list(SPECIAL_CASES)
+    cases += [(s["m"], s["layer"], "normal") for s in configurations()]
+    cases += [(m, layer, "normal") for layer in LAYERS for m in (2, 7, 9, 31, 33, 127, 129, 255, 257)]
+    cases += [(m, layer, dist) for layer in LAYERS for m in (1, 7, 8, 9, 16, 31, 32, 33, 128, 256)
+              for dist in ("zero", "signed", "probes", "outliers")]
+    return list(dict.fromkeys(cases))
+
+
 def out_features(layer: str, m: int) -> int:
     return 1024 if layer == "unpooler" and m <= 8 else LAYERS[layer][0]
 

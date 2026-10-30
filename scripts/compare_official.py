@@ -10,6 +10,10 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from benchmarks.bundle import resolve_bundle  # noqa: E402
 
 FILES = ("TASK.md", "AGENTS.md", "baseline.py", "reference.py", "checks.py", "submission.py")
 
@@ -36,8 +40,8 @@ def main():
     p.add_argument("--report", type=Path, required=True)
     args = p.parse_args()
     try:
-        files = compare(args.official_dir.resolve(), args.local_dir.resolve())
-    except ValueError as exc:
+        files = compare(resolve_bundle(args.official_dir), args.local_dir.resolve())
+    except (OSError, ValueError) as exc:
         p.error(str(exc))
     report = dict(source_url="https://openkernelchallenge.dev/", provenance="caller-supplied CLI download directory",
                   cli_version=args.cli_version, files=files,

@@ -1,6 +1,7 @@
 """Collect versions/device facts only; never dump environment variables."""
 import argparse
 import importlib.metadata
+import inspect
 import json
 import platform
 import shutil
@@ -13,7 +14,7 @@ def main():
     parser.add_argument("--require-h200", action="store_true")
     args = parser.parse_args()
     result = {"python": sys.version, "platform": platform.platform(), "packages": {}}
-    for package in ("torch", "triton", "sglang", "nvidia-cublas-cu12"):
+    for package in ("torch", "triton", "sglang", "numpy", "nvidia-cublas-cu12", "nvidia-cublas-cu13"):
         try:
             result["packages"][package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -30,6 +31,7 @@ def main():
         import torch
         result["cuda_available"] = torch.cuda.is_available()
         result["torch_cuda"] = torch.version.cuda
+        result["external_cuda_event_argument"] = "external" in inspect.signature(torch.cuda.Event).parameters
         result["devices"] = []
         for index in range(torch.cuda.device_count()):
             props = torch.cuda.get_device_properties(index)
@@ -44,6 +46,8 @@ def main():
     if args.require_h200:
         valid = result["cuda_available"] and result.get("bf16_matmul_smoke")
         valid = valid and bool(result.get("devices")) and "H200" in result["devices"][0]["name"]
+        valid = valid and result["devices"][0]["capability"] == [9, 0]
+        valid = valid and result.get("external_cuda_event_argument")
         valid = valid and all(result["packages"][p] for p in ("torch", "triton", "sglang"))
         if not valid:
             print("H200 + CUDA torch/Triton/SGLang required; environment not ready for GPU scoring.", file=sys.stderr)
