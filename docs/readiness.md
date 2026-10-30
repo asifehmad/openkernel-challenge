@@ -14,14 +14,16 @@
 ## Before H200 measurements
 
 Completed locally: isolated-file CPU packaging, metadata/bounds validation,
-single-pass/GEMV comparison entry points, 28 passing tests (3 explicitly skipped),
-600 reduced CPU checks and 56 offline SM90 compilations. These do not satisfy
+single-pass/GEMV comparison entry points, latest 34 passing tests (3 explicitly skipped),
+latest 200 reduced CPU checks and the previous 56 offline SM90 compilations. Six
+representative kernels now also have offline allocation diagnostics. These do not satisfy
 any GPU gate below. See [audit](audit.md) and [validation](validation.md).
 
 - [ ] Obtain access to an NVIDIA H200 SXM and confirm compute/runtime support.
 - [ ] Record the immutable official image digest and all relevant tool versions.
 - [ ] Fetch the current task through official `okc init`; confirm file hashes, full rules, memory/preparation caps, available dependencies and leaderboard.
 - [ ] Confirm all required GPU imports and candidate JIT compilation succeed in that image.
+- [ ] Pass the one-configuration smoke stage for each selected entry point before starting full tests.
 - [ ] Run the local official reference/check routines on all nine published test cases and all 30 scored configurations.
 - [ ] Test unseen weights/activation seeds, outliers, zero rows, signed power-of-two probes and nearby batch sizes.
 - [ ] Test CUDA graph capture and replay with new activation contents and retained old outputs.
@@ -35,6 +37,7 @@ any GPU gate below. See [audit](audit.md) and [validation](validation.md).
 - [ ] Retain raw samples, repeated-capture outcomes, A/A control, timing-overhead treatment and environment/source metadata.
 - [ ] Review all 30 per-shape comparisons and six weighted load totals; use the geometric-mean load score.
 - [ ] Clearly label local figures as provisional rather than official judge scores.
+- [ ] Retain the tested candidate/task copies; compare only complete matching records using `summarize_candidates.py`.
 - [ ] Verify any apparent gain exceeds observed noise; repeat promising changes without changing several variables at once.
 - [ ] Verify GPU resources and bottlenecks with profiling where available; do not substitute profiler timings for graph latencies.
 

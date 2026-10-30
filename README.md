@@ -90,10 +90,18 @@ checks and submissions each require explicit approval.
 
 The follow-up [audit](docs/audit.md) adds metadata bounds checks and explicit
 `single_pass_kernel_fn` / `gemv_kernel_fn` experiment entry points. Default
-dispatch and large-M PyTorch behavior remain unchanged. Current CPU validation:
+dispatch and large-M PyTorch behavior remain unchanged. Validation at `41aeda0`:
 28 tests passed, 3 native BF16-dot interpreter tests skipped, 600 reduced CPU
 cases passed across the three candidate entry points, and 56 SM90
 specializations compiled offline. See [validation](docs/validation.md).
+
+The next readiness update adds [Hostinger CLI instructions](docs/hostinger.md),
+bundle-layout discovery, a one-configuration GPU smoke stage, and independent
+candidate runs with retained source/task artifacts. GPU setup now installs
+nothing into the evaluation image. Latest local checks: **34 passed, 3 skipped**
+and **200 reduced CPU cases passed**; the previous 56-specialization offline
+result remains applicable because submission.py is unchanged. No GPU result
+has been produced. See [readiness update](docs/h200_preflight.md).
 
 ## Current limitations
 

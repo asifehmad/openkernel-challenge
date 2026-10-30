@@ -1,6 +1,24 @@
 # Phase A validation record
 
-## Follow-up audit validation
+## Latest H200 preflight update (candidate unchanged from 41aeda0)
+
+- **34 tests passed, 3 native BF16-dot interpreter tests skipped**, plus
+  **200 reduced CPU cases passed** via `scripts/run_tests.sh`.
+- Six representative kernels compiled with offline resource extraction;
+  register/shared/stack/local allocations are documented in
+  [the preflight report](h200_preflight.md). No GPU execution or occupancy claim.
+- Docker registry manifest/config retrieved and config SHA256 verified. The
+  image was not unpacked due to storage limits; installed runtime versions and
+  actual SGLang imports remain unverified.
+- GPU smoke correctly refuses CPU-only execution and records failure evidence.
+  The real H200 smoke/first-session path remains unrun.
+- Fresh task layout tested with explicitly synthetic CLI fixtures; official CLI
+  installation, authentication and current-task reconciliation remain blocked.
+  No identical request through the blocked proxy was repeated.
+- Default submission.py is unchanged. New workflow preserves tested artifacts
+  and rejects incomplete/mismatched evidence when comparing candidates.
+
+## Previous follow-up audit validation (41aeda0)
 
 On the same CPU environment, the follow-up audit executed:
 
