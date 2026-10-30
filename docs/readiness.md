@@ -1,6 +1,6 @@
 # Submission readiness
 
-**Status: not ready for competition submission.** The implementation is a CPU-developed candidate. Compatible GPU execution, official validation, performance measurement and current-rule verification remain outstanding. No competition submission is authorized automatically.
+**Status: not ready for competition submission.** The repository owner has verified an official `okc 0.7.2` task download on the VPS: all five contract files match by SHA256. GPU execution, official check results, performance measurements, and live website-only limits still remain outstanding. No competition submission is authorized automatically.
 
 | Metric | Result |
 |---|---|
@@ -21,7 +21,8 @@ any GPU gate below. See [audit](audit.md) and [validation](validation.md).
 
 - [ ] Obtain access to an NVIDIA H200 SXM and confirm compute/runtime support.
 - [ ] Record the immutable official image digest and all relevant tool versions.
-- [ ] Fetch the current task through official `okc init`; confirm file hashes, full rules, memory/preparation caps, available dependencies and leaderboard.
+- [x] Fetch the task through authenticated official `okc 0.7.2 init` and verify hashes of TASK.md, AGENTS.md, baseline.py, reference.py and checks.py (owner-provided 2026-10-31 CLI comparison).
+- [ ] Separately confirm any current website-only rules, memory limits, allowed dependencies, quotas and leaderboard; refresh the official bundle if updated.
 - [ ] Confirm all required GPU imports and candidate JIT compilation succeed in that image.
 - [ ] Pass the one-configuration smoke stage for each selected entry point before starting full tests.
 - [ ] Run the local official reference/check routines on all nine published test cases and all 30 scored configurations.

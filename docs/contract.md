@@ -1,32 +1,20 @@
-# Provisional challenge contract
+# Challenge contract — official CLI bundle verified (2026-10-31)
 
-Follow-up audit: direct installer/API/site access still fails at the proxy
-CONNECT step even after explicit network permission and elevated execution.
-No current official rule version, CLI version, daily quota, leaderboard result
-or primary file hash has been verified. All five preserved starter hashes still
-match `muse_bf16_proj/PROVENANCE.json`; no live discrepancy can be established.
-See [access evidence](official_access.json) and [audit findings](audit.md).
-`scripts/compare_official.py` provides a non-destructive six-file hash comparison
-once a current bundle can be downloaded through the official CLI.
+**Verified file identity:** The repository owner installed and authenticated official `okc 0.7.2` on their Hostinger VPS, fetched `muse_bf16_proj` with `okc init`, and shared the output of `scripts/compare_official.py`. All five preserved task/agent/baseline/reference/check files match the freshly downloaded bundle **byte-for-byte (SHA256)**. The starter `submission.py` differs from our candidate as intended.
 
-The repository preserves the mirrored starter `muse_bf16_proj/TASK.md`, `AGENTS.md`, `baseline.py`, `reference.py` and `checks.py` without changing their contents. They are usable for local development, but they are **secondary snapshots**, not directly authenticated current organizer downloads. See the accompanying provenance files and `third_party/okc_snapshot/LICENSE`. Official website access returned proxy HTTP 403; refresh with official `okc init muse_bf16_proj` and read the current full rules before declaring submission readiness.
+The supplied verification report was generated against `/root/openkernel-challenge/official/vps-20261030T194802Z/muse_bf16_proj`. This is **owner-provided CLI evidence**, not a separate download performed from this environment. The comparison reported `contract_matches: true`, `official_check_run: false`, and `official_submission_run: false`. No credentials or authentication files were shared.
 
-## Source identity
-
-The bytes match in these public repositories:
-
-- `lilaclilac09/open-kernel-challenge`, commit `d9bdcc9f01dff1018f2f256a0a1a63911a16557e`, under `muse_bf16_proj/`.
-- `Xuefeng-Zhu/open-kernel-challenge`, commit `5372a758c7d4c03431ed4887f75dfb7d5e53aa1b`, under `official/`. Its manifest says it downloaded `https://openkernelchallenge.dev/api/v1/problems/muse_bf16_proj` on 2026-10-24. The raw response includes the starter template, descriptions and scored configurations.
-
-| File | SHA256 |
-|---|---|
+| File | SHA256 (official = repository) |
+| --- | --- |
 | `TASK.md` | `deb9118fa75cbc03c2ebd16b283e72a0314168d40299fa7501373eb1960a2bc4` |
 | `AGENTS.md` | `d6f3fb0cedb7cfac9aaef929c5ec2999eba5e1103cc3fa240f49de4e732e21fc` |
 | `baseline.py` | `39f52ea5b65505958aa9dee9c8129dd394cbba4e670046f862b5a88ce91a0574` |
 | `reference.py` | `e62491abc9ddcad33f5faba8b0ee74cf6370b7be5dd2dc05031742f3ebf7147d` |
 | `checks.py` | `9a046c3c38db28b325dcd1557baecdf6bc9ef941d2175f9a900ba4c230bb8055` |
 
-These are snapshot integrity checks, not proof that the live organizer still distributes the same files. The independent candidate does not import or depend on reference/check files during evaluation.
+**Scope:** This authenticates the five checked-in task files against the bundle downloaded by `okc 0.7.2` on the VPS. It does not by itself verify dynamically served website rules beyond those files, the private evaluation harness, current leaderboard data, daily quotas, CUDA compatibility, correctness, or performance. Recheck hashes if the CLI/task is updated.
+
+Historical access/provenance note: The original agent environment could not reach the official domain and therefore used two corroborating public mirrors. Their hashes have now been matched to the owner's official CLI download. The original `docs/official_access.json` remains a historical account of that earlier blocked environment, not the current VPS status. See [original source provenance](../muse_bf16_proj/PROVENANCE.json) and [website cross-check](official_web_crosscheck.md).
 
 ## API and computation
 
