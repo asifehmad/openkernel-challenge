@@ -107,7 +107,7 @@ has been produced. See [readiness update](docs/h200_preflight.md).
 
 No H200, driver, CUDA runtime or SGLang execution is available here. No GPU
 latencies, register counts, occupancy or tensor-core utilization are claimed.
-The live rules, current leaderboard and current task bundle remain unverified.
+The official site's indexed rules and problem description were independently reviewed on 2026-10-31; see [official website cross-check](docs/official_web_crosscheck.md). Direct live task/API and CLI access, authenticated task hashes, current leaderboard and GPU correctness remain unverified.
 The project is prepared for experiments; the fastest valid dispatch is still
 to be selected from measurements. Raw results, compiled artifacts, credentials
 and weights are ignored by Git. Existing cloud checkouts are isolated already;
