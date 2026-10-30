@@ -1,17 +1,19 @@
 # Muse BF16 projection — H200 development
 
 Independent initial candidate for `muse_bf16_proj`, targeting the Muse Spark Open
-Kernel Challenge. **Both official off-board GPU checks passed all 9 tests.** The router fix
-improved from 0.772x (6,253.9 µs) to **0.979x (4,934.9 µs)**. A follow-up
-BF16 small-M matmul experiment is unverified. No leaderboard submission made.
+Kernel Challenge. **Three official off-board GPU checks passed all 9 tests.** Latest verified
+result: **1.044x (4,625.7 µs)** in job `1e9be7af4434464b`, on the
+`feat/muse-bf16-proj` branch. THIS EXPERIMENT BRANCH switches BF16 M16/M32
+to narrow one-launch Triton GEMM; it is not yet checked. No leaderboard
+submission has been made.
 
 | Metric | Result |
 | --- | --- |
 | Official baseline | 4.8308 ms in a public October 24 API snapshot; live unverified |
 | Current leaderboard target | 2.93 ms user-supplied target; live rank unverified |
-| Latest official-check latency | 4.9349 ms (job `b9558e1c1e85451c`) |
-| Latest official-check speedup | 0.979x; 95% 0.964–0.994x |
-| GPU correctness | Router-fallback revision: 9/9 passed; current BF16 experiment: untested |
+| Best verified official-check latency | 4.6257 ms (job `1e9be7af4434464b`) |
+| Best verified official-check speedup | 1.044x; 95% 1.029–1.060x |
+| GPU correctness | Best verified feature branch: 9/9; THIS experimental branch: untested |
 | Submission readiness | Not ready |
 
 The immediate objective is <2.93 ms, with ≤2.5 ms as a stretch target. These

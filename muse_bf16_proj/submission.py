@@ -1,10 +1,10 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Official check b9558e1c passed 9/9 at 0.979x (4,934.9 us).
+"""Experiment branch: narrow one-launch Triton GEMM for BF16 M=16/32.
 
-This unverified revision removes the default BF16 split-K path at M=8/16/32,
-using native matmul instead. It preserves the proven router and M=1 paths,
-and the alternative Triton kernels for further GPU comparison.
+The preceding native-matmul candidate passed official check 1e9be7af:
+9/9, 1.044x, 4,625.7 us. This experimental kernel has NOT been checked.
+Use the best verified feature branch if it loses or fails correctness.
 """
 from typing import Any, TypedDict
 
@@ -216,6 +216,17 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
         # This is a performance hypothesis; measure on the official H200.
         # The split-K code remains available to explicit experimental dispatch.
         if small_m_strategy == "default":
+            if m in (16, 32):
+                # Experimental 16-output-wide tiles increase parallel CTAs:
+                # e.g. QKV has 144 CTAs, enough for SM90 occupancy; no scratch.
+                # BM spans the entire M tile; one FP32 accumulation and BF16
+                # store, with all M/N/K tails masked in _single_gemm.
+                out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
+                _single_gemm[(1, triton.cdiv(n, 16))](
+                    x, w, out, m, n, k, x.stride(0), x.stride(1),
+                    w.stride(0), w.stride(1),
+                    BM=m, BN=16, BK=128, num_warps=4)
+                return out
             return x @ w[:n].T
         if small_m_strategy == "single_pass":
             out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
@@ -235,7 +246,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Second post-check BF16 small-M experiment; requires official recheck."""
+    """Experimental M16/M32 single-pass narrow tiles; not yet GPU verified."""
     return _dispatch(data, state, "default")
 
 

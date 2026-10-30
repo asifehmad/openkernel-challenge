@@ -1,6 +1,6 @@
 # Experiment log
 
-Official off-board checks `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs) and `b9558e1c1e85451c` (0.979x; 4,934.9 µs) each passed 9/9. The new BF16 small-M native matmul experiment is unverified; see [check evidence](official_checks.md). `TBD` means unmeasured, not zero.
+Official off-board jobs `9ea7b5b7bf0f43ec`, `b9558e1c1e85451c` and `1e9be7af4434464b` passed all 9 tests, with scores 0.772x, 0.979x and **1.044x**, respectively. The **narrow-tile experiment** on this branch has not yet run on a GPU. `TBD` means unmeasured.
 
 | ID | Hypothesis / scope | Change | Correctness evidence | Previous latency | New latency | Aggregate effect | Decision |
 |---|---|---|---|---|---|---|---|
@@ -13,7 +13,8 @@ Official off-board checks `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs) and `b9558e1c
 
 | A006 | Official check of initial candidate | Original GEMV/split-K/custom-router dispatch | 9/9 official tests passed, job `9ea7b5b7bf0f43ec` | SGLang 4,830.8 µs historical baseline | 6,253.9 µs | 0.772x (95% 0.761–0.784x) | Identify router M>8 regression (~51 µs each); fix first |
 | A007 | Replace regressed router paths while keeping M=8 win | FP32 `F.linear` for M=1; native BF16 high/low matmul for M>8; keep custom M=8 GEMV | 9/9 official tests passed, job `b9558e1c1e85451c` | Previous run 6,253.9 µs | 4,934.9 µs | 0.979x overall; 21.1% lower candidate latency | Retain router changes |
-| A008 | Eliminate BF16 split-K overhead for M=8/16/32 | Default route uses native PyTorch BF16 matmul at 8<=M<=32; M=1 custom GEMV and router unchanged | Not yet tested; existing M>32 native matmul passed 9/9 in earlier run | 4,934.9 µs | TBD | TBD | One-factor experiment: rerun official check; revert if slower or incorrect |
+| A008 | Eliminate BF16 split-K overhead for M=8/16/32 | Default route uses native PyTorch BF16 matmul at 8<=M<=32; M=1 custom GEMV and router unchanged | Official 9/9 check job `1e9be7af4434464b` | 4,934.9 µs | 4,625.7 µs | 1.044x (95% CI 1.029–1.060x) | **Best verified**; preserve commit `ced1acb` |
+| A009 | Narrow single-pass CTA to raise SM occupancy at M=16/32 | Reuse masked BF16 `_single_gemm`, set `BM=M, BN=16, BK=128`; keep M=1, M=8, router and M>32 unchanged | **Unverified experiment** | 4,625.7 µs | TBD | TBD | Compare official check to job `1e9be7af4434464b`; discard branch on regression |
 
 Initial candidate milestone: `116d64f`. See [validation record](validation.md) for
 commands, environment and the interpreter limitation. A static or CPU-only pass
