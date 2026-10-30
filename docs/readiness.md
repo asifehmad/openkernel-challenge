@@ -1,20 +1,21 @@
 # Submission readiness
 
-**Status: not ready for competition submission.** The previous revision passed all 9 official correctness tests in off-board job `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs). The new router-fallback revision remains untested. H200 local profiling and live website-only limits remain open. No leaderboard submission has been authorized.
+**Status: not ready for competition submission.** The router-fallback revision passed all 9 official correctness tests in off-board job `b9558e1c1e85451c` (0.979x; 4,934.9 µs). The new BF16 small-M native-matmul revision remains untested. Local H200 profiling and live website-only limits remain open. No leaderboard submission has been authorized.
 
 | Metric | Result |
 |---|---|
 | Official baseline | 4.83 ms — user-supplied target; historical mirror records 4830.8 µs; not live-verified |
 | Current leaderboard target | 2.93 ms — user-supplied target; current leaderboard unverified |
-| Previous official-check latency | 6,253.9 µs (job `9ea7b5b7bf0f43ec`) |
-| Previous official-check speedup | 0.772x (95% 0.761–0.784x) |
-| Correctness | Previous revision 9/9 passed; new revision not tested |
+| Latest official-check latency | 4,934.9 µs (job `b9558e1c1e85451c`) |
+| Latest official-check speedup | 0.979x (95% 0.964–0.994x) |
+| Correctness | Router-fallback revision: 9/9 passed; current BF16 experiment: untested |
 | Submission readiness | Not ready |
 
 ## First official check
 
-- [x] Official off-board GPU check job `9ea7b5b7bf0f43ec` passed 9/9 (previous revision only).
-- [ ] Run a new authorized `okc check` for the router-fallback revision; compare all 30 timings.
+- [x] Official off-board GPU check job `9ea7b5b7bf0f43ec` passed 9/9 (0.772x; 6,253.9 µs).
+- [x] Official off-board GPU check job `b9558e1c1e85451c` passed 9/9 (0.979x; 4,934.9 µs).
+- [ ] Run a new authorized `okc check` for the BF16 small-M native matmul revision; compare all 30 timings.
 - [ ] Review and retain non-secret profile/log/JSON artifacts on VPS.
 
 ## Before H200 measurements

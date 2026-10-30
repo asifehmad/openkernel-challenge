@@ -1,6 +1,6 @@
 # Experiment log
 
-The first official off-board GPU check passed 9/9 but scored 0.772x at 6,253.9 µs; see [official check result](official_checks.md). The router-fallback revision remains unmeasured. `TBD` means unmeasured, not zero.
+Official off-board checks `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs) and `b9558e1c1e85451c` (0.979x; 4,934.9 µs) each passed 9/9. The new BF16 small-M native matmul experiment is unverified; see [check evidence](official_checks.md). `TBD` means unmeasured, not zero.
 
 | ID | Hypothesis / scope | Change | Correctness evidence | Previous latency | New latency | Aggregate effect | Decision |
 |---|---|---|---|---|---|---|---|
@@ -12,7 +12,8 @@ The first official off-board GPU check passed 9/9 but scored 0.772x at 6,253.9 �
 | A005 | Reduce first GPU session setup risk without changing default kernels | Preserve image packages, discover bundle layout, add representative smoke and retained-candidate comparison | 34 tests pass/3 skip, 200 reduced CPU cases pass; registry manifest verified, runtime/CLI/GPU still blocked | TBD | TBD | TBD | Retain workflow; no kernel promotion |
 
 | A006 | Official check of initial candidate | Original GEMV/split-K/custom-router dispatch | 9/9 official tests passed, job `9ea7b5b7bf0f43ec` | SGLang 4,830.8 µs historical baseline | 6,253.9 µs | 0.772x (95% 0.761–0.784x) | Identify router M>8 regression (~51 µs each); fix first |
-| A007 | Replace regressed router paths while keeping M=8 win | FP32 `F.linear` for M=1; native BF16 high/low matmul for M>8; keep custom M=8 GEMV | Not yet tested on GPU | Previous run 6,253.9 µs | TBD | TBD | Run official check; do not claim an improvement beforehand |
+| A007 | Replace regressed router paths while keeping M=8 win | FP32 `F.linear` for M=1; native BF16 high/low matmul for M>8; keep custom M=8 GEMV | 9/9 official tests passed, job `b9558e1c1e85451c` | Previous run 6,253.9 µs | 4,934.9 µs | 0.979x overall; 21.1% lower candidate latency | Retain router changes |
+| A008 | Eliminate BF16 split-K overhead for M=8/16/32 | Default route uses native PyTorch BF16 matmul at 8<=M<=32; M=1 custom GEMV and router unchanged | Not yet tested; existing M>32 native matmul passed 9/9 in earlier run | 4,934.9 µs | TBD | TBD | One-factor experiment: rerun official check; revert if slower or incorrect |
 
 Initial candidate milestone: `116d64f`. See [validation record](validation.md) for
 commands, environment and the interpreter limitation. A static or CPU-only pass

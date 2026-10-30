@@ -1,10 +1,10 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Official check 9ea7b5b7: previous revision passed 9/9 at 0.772x.
+"""Official check b9558e1c passed 9/9 at 0.979x (4,934.9 us).
 
-This revision tests a baseline-equivalent router fallback for M=1 and M>8,
-retaining the measured fast M=8 GEMV. Rerun official check to validate.
-Only weights are prepared; every call uses fresh activations.
+This unverified revision removes the default BF16 split-K path at M=8/16/32,
+using native matmul instead. It preserves the proven router and M=1 paths,
+and the alternative Triton kernels for further GPU comparison.
 """
 from typing import Any, TypedDict
 
@@ -211,6 +211,12 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
             x.stride(0), x.stride(1), BM=16, BN=32, BK=64, num_warps=4)
         return out
     if m <= 32:
+        # Official check b9558e1c found two-launch split-K slower than SGLang
+        # for M=8/16/32. Try cuBLAS-backed PyTorch matmul for the default path.
+        # This is a performance hypothesis; measure on the official H200.
+        # The split-K code remains available to explicit experimental dispatch.
+        if small_m_strategy == "default":
+            return x @ w[:n].T
         if small_m_strategy == "single_pass":
             out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
             _single_gemm[(triton.cdiv(m, 16), triton.cdiv(n, 64))](
@@ -229,7 +235,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """First post-check router improvement candidate; unverified until rerun."""
+    """Second post-check BF16 small-M experiment; requires official recheck."""
     return _dispatch(data, state, "default")
 
 

@@ -1,17 +1,17 @@
 # Muse BF16 projection — H200 development
 
 Independent initial candidate for `muse_bf16_proj`, targeting the Muse Spark Open
-Kernel Challenge. **First official off-board GPU check passed all 9 tests but scored 0.772x**
-(6,253.9 µs; job `9ea7b5b7bf0f43ec`). The post-check router optimization
-has not yet been checked. No official leaderboard submission has been made.
+Kernel Challenge. **Both official off-board GPU checks passed all 9 tests.** The router fix
+improved from 0.772x (6,253.9 µs) to **0.979x (4,934.9 µs)**. A follow-up
+BF16 small-M matmul experiment is unverified. No leaderboard submission made.
 
 | Metric | Result |
 | --- | --- |
 | Official baseline | 4.8308 ms in a public October 24 API snapshot; live unverified |
 | Current leaderboard target | 2.93 ms user-supplied target; live rank unverified |
-| Prior official-check latency | 6.2539 ms (job `9ea7b5b7bf0f43ec`) |
-| Prior official-check speedup | 0.772x; 95% 0.761–0.784x |
-| GPU correctness | Previous revision: 9/9 passed; current revision: untested |
+| Latest official-check latency | 4.9349 ms (job `b9558e1c1e85451c`) |
+| Latest official-check speedup | 0.979x; 95% 0.964–0.994x |
+| GPU correctness | Router-fallback revision: 9/9 passed; current BF16 experiment: untested |
 | Submission readiness | Not ready |
 
 The immediate objective is <2.93 ms, with ≤2.5 ms as a stretch target. These
@@ -106,11 +106,12 @@ has been produced. See [readiness update](docs/h200_preflight.md).
 
 ## First official off-board GPU result
 
-Official `okc check` job `9ea7b5b7bf0f43ec` passed all nine correctness tests
-but was slower than SGLang: 0.772x speedup and 6,253.9 µs. The main regression
-was router M=16/32/128/256 (~51 µs versus SGLang ~15–18 µs). The subsequent
-router fallback for M>8, F.linear for M=1, and retained custom GEMV at M=8
-are **not yet officially tested**. See [check summary](docs/official_checks.md).
+Official `okc check` job `9ea7b5b7bf0f43ec` passed 9/9 but was slow: 0.772x,
+6,253.9 µs. Router regressions M>8 were fixed in job `b9558e1c1e85451c`:
+**9/9 passed, 0.979x, 4,934.9 µs**. The next experiment replaces split-K BF16
+M=8/16/32 with native matmul, while preserving the validated router paths.
+**This new BF16 experiment is not yet officially tested.**
+See [check summary](docs/official_checks.md).
 
 ## Current limitations
 
