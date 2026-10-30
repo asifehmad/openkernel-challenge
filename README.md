@@ -1,16 +1,17 @@
 # Muse BF16 projection — H200 development
 
 Independent initial candidate for `muse_bf16_proj`, targeting the Muse Spark Open
-Kernel Challenge. **Phase A only: no GPU correctness result or measured speedup.**
-No official competition submission has been made.
+Kernel Challenge. **First official off-board GPU check passed all 9 tests but scored 0.772x**
+(6,253.9 µs; job `9ea7b5b7bf0f43ec`). The post-check router optimization
+has not yet been checked. No official leaderboard submission has been made.
 
 | Metric | Result |
 | --- | --- |
 | Official baseline | 4.8308 ms in a public October 24 API snapshot; live unverified |
 | Current leaderboard target | 2.93 ms user-supplied target; live rank unverified |
-| Our measured latency | TBD |
-| Our verified speedup | TBD |
-| GPU correctness | Not tested |
+| Prior official-check latency | 6.2539 ms (job `9ea7b5b7bf0f43ec`) |
+| Prior official-check speedup | 0.772x; 95% 0.761–0.784x |
+| GPU correctness | Previous revision: 9/9 passed; current revision: untested |
 | Submission readiness | Not ready |
 
 The immediate objective is <2.93 ms, with ≤2.5 ms as a stretch target. These
@@ -102,6 +103,14 @@ nothing into the evaluation image. Latest local checks: **34 passed, 3 skipped**
 and **200 reduced CPU cases passed**; the previous 56-specialization offline
 result remains applicable because submission.py is unchanged. No GPU result
 has been produced. See [readiness update](docs/h200_preflight.md).
+
+## First official off-board GPU result
+
+Official `okc check` job `9ea7b5b7bf0f43ec` passed all nine correctness tests
+but was slower than SGLang: 0.772x speedup and 6,253.9 µs. The main regression
+was router M=16/32/128/256 (~51 µs versus SGLang ~15–18 µs). The subsequent
+router fallback for M>8, F.linear for M=1, and retained custom GEMV at M=8
+are **not yet officially tested**. See [check summary](docs/official_checks.md).
 
 ## Current limitations
 

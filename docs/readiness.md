@@ -1,15 +1,21 @@
 # Submission readiness
 
-**Status: not ready for competition submission.** The repository owner has verified an official `okc 0.7.2` task download on the VPS: all five contract files match by SHA256. GPU execution, official check results, performance measurements, and live website-only limits still remain outstanding. No competition submission is authorized automatically.
+**Status: not ready for competition submission.** The previous revision passed all 9 official correctness tests in off-board job `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs). The new router-fallback revision remains untested. H200 local profiling and live website-only limits remain open. No leaderboard submission has been authorized.
 
 | Metric | Result |
 |---|---|
 | Official baseline | 4.83 ms — user-supplied target; historical mirror records 4830.8 µs; not live-verified |
 | Current leaderboard target | 2.93 ms — user-supplied target; current leaderboard unverified |
-| Our measured latency | TBD |
-| Our verified speedup | TBD |
-| Correctness | GPU not tested |
+| Previous official-check latency | 6,253.9 µs (job `9ea7b5b7bf0f43ec`) |
+| Previous official-check speedup | 0.772x (95% 0.761–0.784x) |
+| Correctness | Previous revision 9/9 passed; new revision not tested |
 | Submission readiness | Not ready |
+
+## First official check
+
+- [x] Official off-board GPU check job `9ea7b5b7bf0f43ec` passed 9/9 (previous revision only).
+- [ ] Run a new authorized `okc check` for the router-fallback revision; compare all 30 timings.
+- [ ] Review and retain non-secret profile/log/JSON artifacts on VPS.
 
 ## Before H200 measurements
 

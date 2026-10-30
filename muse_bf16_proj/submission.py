@@ -1,13 +1,15 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Independent Phase-A candidate. GPU correctness/performance not yet verified.
+"""Official check 9ea7b5b7: previous revision passed 9/9 at 0.772x.
 
-Only weights are prepared. Every invocation computes a fresh output from x.
-Triton routes are experiments, not measured dispatch winners; see docs/experiments.md.
+This revision tests a baseline-equivalent router fallback for M=1 and M>8,
+retaining the measured fast M=8 GEMV. Rerun official check to validate.
+Only weights are prepared; every call uses fresh activations.
 """
 from typing import Any, TypedDict
 
 import torch
+import torch.nn.functional as F
 
 try:
     import triton
@@ -140,6 +142,10 @@ def prepare(weights: Weights) -> dict[str, Any]:
     hi = router.to(torch.bfloat16)
     state["router_hi"] = hi
     state["router_lo"] = (router - hi.float()).to(torch.bfloat16)
+    # Also retain prepared transposed layouts for efficient tensor-core GEMM.
+    # The original row-major hi/lo remain available to _router_pair.
+    state["router_hi_t"] = hi.t().contiguous()
+    state["router_lo_t"] = state["router_lo"].t().contiguous()
     return state
 
 
@@ -179,6 +185,15 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
     x, w, m, n, k, layer = _checked_inputs(data, state)
     if triton is None or not x.is_cuda:
         return torch_kernel_fn(data, state)
+    # The first official check identified router M>8 as the largest regression.
+    # Use the permitted BF16 hi+lo representation, as in SGLang, on those sizes.
+    # Keep our faster M=8 FP32 GEMV; M=1 uses the native FP32 F.linear path.
+    if layer == "router" and m == 1:
+        return F.linear(x.float(), w[:n])
+    if layer == "router" and m > 8:
+        acc = torch.mm(x, state["router_hi_t"][:, :n], out_dtype=torch.float32)
+        acc += torch.mm(x, state["router_lo_t"][:, :n], out_dtype=torch.float32)
+        return acc
     # Dispatch depends only on public shapes and layer metadata.
     use_gemv = (layer == "router" and m <= 8) or (
         layer != "router" and ((small_m_strategy == "default" and m == 1) or
@@ -214,7 +229,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Original candidate routing, preserved until H200 measurements exist."""
+    """First post-check router improvement candidate; unverified until rerun."""
     return _dispatch(data, state, "default")
 
 
