@@ -88,6 +88,16 @@ def main():
          dict(SIZE=16*2304, SPLIT=4, B=256)),
         ("router_pair", module._router_pair, {"X": "*bf16", "HI": "*bf16", "LO": "*bf16", "Y": "*fp32"},
          dict(M=128, N=256, K=8192, XM=8192, XK=1, BM=16, BN=32, BK=64)),
+        ("short_router_split_m1", module._router_pair_split,
+         {"X": "*bf16", "HI": "*bf16", "LO": "*bf16", "P": "*fp32"},
+         dict(M=1, N=256, K=8192, XM=8192, XK=1, BM=16, BN=32, BK=64, SPLIT=16)),
+        ("short_router_split_m8", module._router_pair_split,
+         {"X": "*bf16", "HI": "*bf16", "LO": "*bf16", "P": "*fp32"},
+         dict(M=8, N=256, K=8192, XM=8192, XK=1, BM=16, BN=32, BK=64, SPLIT=16)),
+        ("short_router_finish_m1", module._finish_split,
+         {"P": "*fp32", "Y": "*fp32"}, dict(SIZE=256, SPLIT=16, B=256)),
+        ("short_router_finish_m8", module._finish_split,
+         {"P": "*fp32", "Y": "*fp32"}, dict(SIZE=2048, SPLIT=16, B=256)),
     ]
     if args.all_shapes:
         sys.path.insert(0, str(path.parents[1]))

@@ -1,11 +1,11 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Hybrid split-K/router experiment, building on official check cdea2227.
+"""Experiment: use the fused BF16 hi/lo split-K router for M<=8.
 
-The prior fused-router revision passed 9/9 at 1.053x, 4,587.3 us.
-It won for router M=16/32 but regressed badly at M=256.
-This revision restores the tested native hi/lo path at M>=256 only;
-it is not yet GPU-checked. All BF16 routes remain unchanged.
+The source checkpoint (f406563) passed 9/9 at 1.089x and 4,437.5 us.
+This unverified revision replaces only FP32 F.linear (M=1) and the
+FP32 streaming GEMV (M=2..8) with the proven M=9..16 fused router
+architecture. All BF16 paths and all router M>8 paths remain unchanged.
 """
 from typing import Any, TypedDict
 
@@ -216,12 +216,13 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
     x, w, m, n, k, layer = _checked_inputs(data, state)
     if triton is None or not x.is_cuda:
         return torch_kernel_fn(data, state)
-    # The first official check identified router M>8 as the largest regression.
-    # Use the permitted BF16 hi+lo representation, as in SGLang, on those sizes.
-    # Keep our faster M=8 FP32 GEMV; M=1 uses the native FP32 F.linear path.
-    if layer == "router" and m == 1:
+    # Trial: extend the successful FP32-accumulated fused hi/lo split-K router
+    # down to M<=8 on the official default route. This eliminates the
+    # 3-kernel F.linear path at M=1 and the streaming GEMV at M=8.
+    # Alternate entry points retain those established routes as controls.
+    if layer == "router" and m == 1 and small_m_strategy != "default":
         return F.linear(x.float(), w[:n])
-    if layer == "router" and m > 8:
+    if layer == "router" and (m > 8 or small_m_strategy == "default"):
         if small_m_strategy == "default" and m < 256:
             # Official job cdea2227: fused split-K router was 2.109x at
             # M=16, 1.600x at M=32, ~1.0x at M=128, but only 0.609x
@@ -286,7 +287,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Hybrid split-K router (M<256) + native fallback; GPU check pending."""
+    """Experimental fused short-router dispatch; GPU check required."""
     return _dispatch(data, state, "default")
 
 
