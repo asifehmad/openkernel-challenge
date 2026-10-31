@@ -2,7 +2,7 @@
 
 **Branch:** `experiment/muse-bf16-wmma-pack16` based on verified feature checkpoint `4f36b51ba415c3b76868d8ec38c9b6dc0b9c3eb4`.
 
-**Last verified official result:** `5fbcf345f0454920`: **9/9**, **1.117x**, **4,324.7 µs**, 95% CI 1.100–1.134x. **This new WMMA source has not yet passed CUDA compilation or been benchmarked on an H200.**
+**Last verified official result:** `5fbcf345f0454920`: **9/9**, **1.117x**, **4,324.7 µs**, 95% CI 1.100–1.134x. **Final status: REJECTED for performance. The corrected WMMA kernel compiled and passed 9/9 correctness, but scored only 0.631x (7,661.0 µs).**
 
 ## Purpose
 
@@ -42,3 +42,20 @@ The correction in the next commit changes both WMMA fragment template data types
 This is a compile-time fix only; **no CUDA compile, 9/9 correctness, or performance result is claimed for the correction**. We independently checked the packing permutation's mathematical semantics on CPU for a small 32×32 BF16 weight with random activations; that check does not exercise CUDA. The verified `feat/muse-bf16-proj` 1.117x branch is untouched.
 
 Reference: NVIDIA CUDA Programming Guide WMMA fragments and alignment, https://docs.nvidia.com/cuda/archive/13.1.0/cuda-programming-guide/05-appendices/cpp-language-extensions.html#warp-matrix-functions.
+
+## Official outcome: job `9f4bf6209cf044a8`
+
+The corrected native WMMA source (commit `5b717bc82d8ce0c6135004e91e9727ce70064c21`) **compiled successfully and passed all nine official correctness tests**, but scored only **0.631x** (95% CI **0.621–0.640x**) at **7,661.0 µs**. This is slower than SGLang and dramatically slower than our verified 1.117x checkpoint (4,324.7 µs). Job ran 1:31 and queued 0:08; 12/20 daily checks and 10/10 leaderboard submissions were reported remaining at that time. The result was off-board.
+
+| Scored projection | Stable approximately µs | WMMA µs |
+| --- | ---: | ---: |
+| QKV M1 | 14.0 | **45.0** |
+| QKV M8 | 14.5 | **45.9** |
+| QKV M16 | 14.0 | **46.3** |
+| QKV M32 | 14.2 | **84.0** |
+| Pooler M1 | 18.4 | **52.5** |
+| Pooler M8 | 21.5 | **54.4** |
+| Pooler M16 | 21.3 | **55.4** |
+| Pooler M32 | 21.7 | **103.1** |
+
+Likely contributors (not independently profiled): single warp per CTA, 16 K splits, repeated loads into shared memory, tile/synchronization overhead. There is no evidence this WMMA design is competitive. **Reject this branch; do not merge its code into the stable feature branch.** The correctness evidence is useful for future CUDA-kernel design.
