@@ -1,13 +1,13 @@
 # Submission readiness
 
-**Status: best verified candidate, not yet a leaderboard submission.** The owner's latest off-board official check `1b6a10d0c8f84b6b` passed 9/9 correctness and scored 1.089x (4,437.5 µs; 95% CI 1.072–1.105x). Its hybrid router revision is promoted unchanged. Local H200 profiling, wider unseen-seed stress checks and current website-only limits remain outstanding. No leaderboard submission has been authorized.
+**Status: best verified candidate, not yet a leaderboard submission.** The owner's latest off-board official check `5fbcf345f0454920` passed 9/9 correctness and scored 1.117x (4,324.7 µs; 95% CI 1.100–1.134x). Its fused short-router revision is promoted unchanged. Local H200 profiling, wider unseen-seed stress checks and current website-only limits remain outstanding. No leaderboard submission has been authorized.
 
 | Metric | Result |
 |---|---|
 | Official baseline | 4.83 ms — user-supplied target; historical mirror records 4830.8 µs; not live-verified |
 | Current leaderboard target | 2.93 ms — user-supplied target; current leaderboard unverified |
-| Best official-check latency | 4,437.5 µs (job `1b6a10d0c8f84b6b`) |
-| Best official-check speedup | 1.089x (95% CI 1.072–1.105x) |
+| Best official-check latency | 4,324.7 µs (job `5fbcf345f0454920`) |
+| Best official-check speedup | 1.117x (95% CI 1.100–1.134x) |
 | Correctness | 9/9 official tests passed for current `submission.py` |
 | Submission readiness | Not ready |
 
@@ -17,7 +17,8 @@
 - [x] Official off-board GPU check job `b9558e1c1e85451c` passed 9/9 (0.979x; 4,934.9 µs).
 - [x] BF16 native matmul revision: official check `1e9be7af4434464b`, 9/9, 1.044x.
 - [x] Fused router trial: official check `cdea2227f2654a1f`, 9/9, 1.053x (M256 regressed).
-- [x] Hybrid router: official check `1b6a10d0c8f84b6b`, 9/9, 1.089x (best verified).
+- [x] Hybrid router: official check `1b6a10d0c8f84b6b`, 9/9, 1.089x.
+- [x] Fused short router: official check `5fbcf345f0454920`, 9/9, **1.117x (best verified)**.
 - [ ] Run new tests only after a new experimental change, not as a substitute for local profiling.
 - [ ] Review and retain non-secret profile/log/JSON artifacts on VPS.
 

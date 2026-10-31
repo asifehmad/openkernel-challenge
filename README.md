@@ -1,8 +1,8 @@
 # Muse BF16 projection — H200 development
 
 Independent kernel candidate for `muse_bf16_proj`, targeting the Muse Spark Open
-Kernel Challenge. **Best verified official off-board result: 1.089x speedup,
-4,437.5 µs, all nine correctness tests passed** (job `1b6a10d0c8f84b6b`).
+Kernel Challenge. **Best verified official off-board result: 1.117x speedup,
+4,324.7 µs, all nine correctness tests passed** (job `5fbcf345f0454920`).
 The hybrid router keeps fused split-K at M=9–255 and uses native hi/lo matmul
 at M>=256. No leaderboard submission has been made.
 
@@ -10,8 +10,8 @@ at M>=256. No leaderboard submission has been made.
 | --- | --- |
 | Official baseline | 4.8308 ms in a public October 24 API snapshot; live unverified |
 | Current leaderboard target | 2.93 ms user-supplied target; live rank unverified |
-| Best official-check latency | 4.4375 ms (job `1b6a10d0c8f84b6b`) |
-| Best official-check speedup | 1.089x; 95% 1.072–1.105x |
+| Best official-check latency | 4.3247 ms (job `5fbcf345f0454920`) |
+| Best official-check speedup | 1.117x; 95% 1.100–1.134x |
 | GPU correctness | Best current candidate: 9/9 passed in official check |
 | Submission readiness | Not ready |
 
@@ -114,11 +114,15 @@ checks. See [readiness update](docs/h200_preflight.md).
 | `1e9be7af4434464b` | 9/9 | 1.044x | 4,625.7 µs |
 | `74d4ff146a4744f7` | 9/9 | 0.932x | 5,185.0 µs (rejected branch) |
 | `cdea2227f2654a1f` | 9/9 | 1.053x | 4,587.3 µs |
-| **`1b6a10d0c8f84b6b`** | **9/9** | **1.089x** | **4,437.5 µs** |
+| `1b6a10d0c8f84b6b` | 9/9 | 1.089x | 4,437.5 µs |
+| `29a3b639821c40f8` | 9/9 | 1.083x | 4,461.9 µs (large-tile trial) |
+| `3cecb11c38704af0` | 9/9 | 1.086x | 4,446.5 µs (M128 trial) |
+| `f6d322c21e96456f` | 9/9 | 1.081x | 4,470.4 µs (BF16 highsplit trial) |
+| **`5fbcf345f0454920`** | **9/9** | **1.117x** | **4,324.7 µs** |
 
-The 1.089x candidate is the best verified. Its score CI is 1.072–1.105x.
+The 1.117x candidate is the best verified. Its score CI is 1.100–1.134x.
 The current target reported by the owner is a leaderboard leader at 1.60x.
-See [latest official check](docs/official_check_07.md) and [experiment log](docs/experiments.md).
+See [latest official check](docs/official_check_10.md) and [experiment log](docs/experiments.md).
 Do not present off-board checks as leaderboard submissions.
 
 ## Current limitations

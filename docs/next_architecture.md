@@ -1,12 +1,12 @@
 # Strategic pivot: from tile tuning to H200 architecture
 
-**Verified baseline:** feature branch `feat/muse-bf16-proj`, commit `f406563399c647c30fb6c62f2040c4bb71c1e21b`; official job `1b6a10d0c8f84b6b`, **9/9** and **1.089x** at **4,437.5 µs**. User-reported first-place target approximately **1.6x** (roughly 3.0 ms). The new source code is **experimental and has not been GPU checked**. Never automatically use `okc submit`.
+**Verified result:** the fused short-router revision (source commit `64e11666fd52e78e5859e14a9a74c2aadc333489`) passed official check `5fbcf345f0454920` **9/9**, **1.117x** at **4,324.7 µs** (95% CI 1.100–1.134). It has now been promoted unchanged. Previous feature-branch commit `f406563` scored 1.089x. User-reported first-place target approximately **1.6x** (roughly 3.0 ms). Never automatically use `okc submit`.
 
 ## Immediate controlled experiment: fuse the short router
 
 The official stable profile records a router M=1 native FP32 `F.linear` path with three GPU kernels (7.6 µs cumulative GPU work, 10.12 µs scored) and an M=8 custom streaming FP32 GEMV (8.9 µs GPU, 15.32 µs scored). The already-tested M=16 fused `_router_pair_split` path takes 3.0 µs plus 1.2 µs finish (7.44 µs scored). The short-router experiment extends this same two-launch architecture to `1<=M<=8` in the default entry point using `BM=16, BN=32, BK=64, SPLIT=16`. The original F.linear and FP32 GEMV still exist as controls in alternative dispatch entry points.
 
-The router's FP32 weights are represented as BF16 `hi` and `lo` with independent FP32 accumulation, as explicitly permitted by the task. No input-dependent branch or caching is introduced. The M=8 correctness test (including a probe row) and all scored cases are mandatory gates; expect M=1 to be additionally timed and checked. This may be faster or slower than the old route.
+The router's FP32 weights are represented as BF16 `hi` and `lo` with independent FP32 accumulation, as permitted. Official check `5fbcf345f0454920` passed 9/9, including M=8 router correctness; M=1 router scored 6.9 µs vs 10.5 µs SGLang, and M=8 scored 7.4 µs vs 26.4 µs. No input caching or value-dependent dispatch was introduced.
 
 ## Key result from latest check (high split-K, job `f6d322c21e96456f`)
 

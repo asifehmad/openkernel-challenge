@@ -1,6 +1,6 @@
 # Experiment log
 
-Six owner-reported off-board checks each passed **9/9**: 0.772x, 0.979x, 1.044x, rejected narrow-GEMM 0.932x, fused router 1.053x, and **hybrid-router 1.089x** (job `1b6a10d0c8f84b6b`). All are official remote check results, not leaderboard submissions. `TBD` means unmeasured, not zero.
+Six owner-reported off-board checks each passed **9/9**: 0.772x, 0.979x, 1.044x, rejected narrow-GEMM 0.932x, fused router 1.053x, and **hybrid-router 1.089x** (job `1b6a10d0c8f84b6b`). The subsequent large-router, M128-only, BF16 highsplit, and short-router attempts each passed 9/9; the short-router revision **1.117x** is best. All are official remote check results, not leaderboard submissions. `TBD` means unmeasured, not zero.
 
 | ID | Hypothesis / scope | Change | Correctness evidence | Previous latency | New latency | Aggregate effect | Decision |
 |---|---|---|---|---|---|---|---|
@@ -17,6 +17,11 @@ Six owner-reported off-board checks each passed **9/9**: 0.772x, 0.979x, 1.044x,
 | A009 | Narrow single-pass BF16 GEMM for M=16/32 | Reuse `_single_gemm` with `BM=M, BN=16, BK=128` | Official check `74d4ff146a4744f7`: 9/9 | 4,625.7 µs | 5,185.0 µs | 0.932x | Rejected; separate experiment branch |
 | A010 | Fuse router high/low BF16 matmul with parallel split-K | `_router_pair_split`, split 16/8/4/2 by M, FP32 reduction | Official check `cdea2227f2654a1f`: 9/9 | 4,625.7 µs | 4,587.3 µs | 1.053x (95% CI 1.037–1.069x) | M16=2.109x and M32=1.600x; M256=0.609x regression |
 | A011 | Hybrid router dispatch for M>=256 | Retain fused M16/M32 and restore native BF16 high/low router at M>=256 | **Official check `1b6a10d0c8f84b6b`: 9/9** | 4,587.3 µs | **4,437.5 µs** | **1.089x**, CI 1.072–1.105x | **Promote best verified unchanged**; next challenge is BF16 GEMM across M=8–256 |
+
+| A012 | Larger router M128 and M256 tiles | BM32/SPLIT8 for M128/M256 | Official check `29a3b639821c40f8`: 9/9 | 4,437.5 µs | 4,461.9 µs | 1.083x; M128 12.8 µs but M256 regressed to 19.6 µs | Do not promote |
+| A013 | Keep BM32 router only for M128 | restore native M256 | Official check `3cecb11c38704af0`: 9/9 | 4,437.5 µs | 4,446.5 µs | 1.086x, within run-to-run noise | Do not promote |
+| A014 | Increase split-K for BF16 QKV/pooler M16/M32 | SPLIT16 | Official check `f6d322c21e96456f`: 9/9 | 4,437.5 µs | 4,470.4 µs | 1.081x; pooler M32 regressed | Reject |
+| A015 | Extend fused hi/lo split-K router to M<=8 | Replaces F.linear M1 and FP32 GEMV M8, other paths unchanged | Official check `5fbcf345f0454920`: 9/9 | 4,437.5 µs | **4,324.7 µs** | **1.117x**, CI 1.100–1.134; M8 router 3.591x vs SGLang | **New best verified**; preserve source `64e11666` |
 
 Initial candidate milestone: `116d64f`. See [validation record](validation.md) for
 commands, environment and the interpreter limitation. A static or CPU-only pass
