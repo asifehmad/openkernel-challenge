@@ -2,7 +2,7 @@
 
 **Branch:** `experiment/muse-bf16-wmma-pack16` based on verified feature checkpoint `4f36b51ba415c3b76868d8ec38c9b6dc0b9c3eb4`.
 
-**Last verified official result:** `5fbcf345f0454920`: **9/9**, **1.117x**, **4,324.7 µs**, 95% CI 1.100–1.134x. **This new WMMA source has not been compiled or benchmarked on an H200.**
+**Last verified official result:** `5fbcf345f0454920`: **9/9**, **1.117x**, **4,324.7 µs**, 95% CI 1.100–1.134x. **This new WMMA source has not yet passed CUDA compilation or been benchmarked on an H200.**
 
 ## Purpose
 
@@ -32,3 +32,13 @@ The timed native entry point executes two CUDA kernels: one WMMA kernel accumula
 **References:** Official rules https://openkernelchallenge.dev/rules; NVIDIA WMMA guide https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/cpp-language-extensions.html; PyTorch load_inline https://docs.pytorch.org/docs/stable/cpp_extension.html.
 
 Safety: keep `feat/muse-bf16-proj` unchanged; do not merge on a speculative speedup. This source contains no external files, hidden weights, network operations, or input-value dispatch.
+
+## Compiler error from official check `0a39f9c13376457a`
+
+The owner ran an off-board check on the first WMMA revision, which failed during `prepare()` before any numerical tests or benchmark cases could execute. The CUDA compiler reported: `nvcuda::wmma::precision has no member bfloat16`, followed by an incomplete WMMA fragment type. This consumed a check but **not** a leaderboard submission.
+
+The correction in the next commit changes both WMMA fragment template data types from `wmma::precision::bfloat16` to CUDA's valid `__nv_bfloat16` (matching `cuda_bf16.h`). Additionally, all WMMA shared-memory fragment buffers now have **32-byte alignment**, as NVIDIA specifies 256-bit pointer alignment for WMMA matrix load/store. The PyTorch CUDA extension's name was bumped from `muse_proj_bf16_wmma16_v1` to `muse_proj_bf16_wmma16_v2` so a fresh build can be identified unambiguously.
+
+This is a compile-time fix only; **no CUDA compile, 9/9 correctness, or performance result is claimed for the correction**. We independently checked the packing permutation's mathematical semantics on CPU for a small 32×32 BF16 weight with random activations; that check does not exercise CUDA. The verified `feat/muse-bf16-proj` 1.117x branch is untouched.
+
+Reference: NVIDIA CUDA Programming Guide WMMA fragments and alignment, https://docs.nvidia.com/cuda/archive/13.1.0/cuda-programming-guide/05-appendices/cpp-language-extensions.html#warp-matrix-functions.

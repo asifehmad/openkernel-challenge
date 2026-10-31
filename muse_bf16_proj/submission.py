@@ -6,7 +6,9 @@ Verified parent 4f36b51 passed official 9/9 at 1.117x, 4,324.7 us.
 The new weight layout is a LOSSLESS BF16 16x16 transpose within each
 tile, created only in untimed prepare(). CUDA tensor cores accumulate
 FP32 partials; router and other BF16 paths remain identical to parent.
-This branch has not passed an official GPU check and may be slower.
+The previous revision failed CUDA compilation on the unsupported
+wmma::precision::bfloat16 type. This revision uses __nv_bfloat16 and
+32-byte-aligned WMMA shared buffers; it remains unverified on GPU.
 """
 from typing import Any, TypedDict
 
@@ -198,14 +200,14 @@ __global__ void wmma_project(
     const int part = blockIdx.z;
     const int k_first = part * (K / splits);
     const int k_last = k_first + (K / splits);
-    __shared__ __align__(16) __nv_bfloat16 a_s[256];
-    __shared__ __align__(16) __nv_bfloat16 b_s[256];
-    __shared__ __align__(16) float c_s[256];
+    __shared__ __align__(32) __nv_bfloat16 a_s[256];
+    __shared__ __align__(32) __nv_bfloat16 b_s[256];
+    __shared__ __align__(32) float c_s[256];
 
     wmma::fragment<wmma::matrix_a, 16, 16, 16,
-                   wmma::precision::bfloat16, wmma::row_major> af;
+                   __nv_bfloat16, wmma::row_major> af;
     wmma::fragment<wmma::matrix_b, 16, 16, 16,
-                   wmma::precision::bfloat16, wmma::row_major> bf;
+                   __nv_bfloat16, wmma::row_major> bf;
     wmma::fragment<wmma::accumulator, 16, 16, 16, float> cf;
     wmma::fill_fragment(cf, 0.f);
 
@@ -286,7 +288,7 @@ def _prepare_wmma(state: dict[str, Any]) -> None:
 
     # No compilation or host-to-device movement occurs in kernel_fn().
     state["_bf16_wmma"] = load_inline(
-        name="muse_proj_bf16_wmma16_v1",
+        name="muse_proj_bf16_wmma16_v2",
         cpp_sources=_CPP_WMMA_SOURCE,
         cuda_sources=_CUDA_WMMA_SOURCE,
         functions=["bf16_wmma_cuda"],
