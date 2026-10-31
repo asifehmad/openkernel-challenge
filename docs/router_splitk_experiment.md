@@ -1,6 +1,6 @@
 # Profile-driven router split-K experiment
 
-**Status: first fused router revision was verified at 1.053x, 9/9 correct; the new hybrid fallback remains untested.** This branch is based on the verified `feat/muse-bf16-proj` commit `ced1acb496f2ee25882e2254c5df2cbb1f32fac0`, which passed the official `okc check` 9/9 at **1.044x (4,625.7 µs)**, job `1e9be7af4434464b`.
+**Status: hybrid router verified at 1.089x, 9/9 correct (job `1b6a10d0c8f84b6b`); promoted as best observed.** This branch is based on the verified `feat/muse-bf16-proj` commit `ced1acb496f2ee25882e2254c5df2cbb1f32fac0`, which passed the official `okc check` 9/9 at **1.044x (4,625.7 µs)**, job `1e9be7af4434464b`.
 
 ## Evidence from official profile
 
@@ -45,9 +45,7 @@ The owner ran `okc check` on the initial fused split-K router revision (commit `
 
 The whole-run improvement from 1.044x to 1.053x is smaller than the stated run-level confidence bounds; it is not evidence that the whole-run speedup is reliably higher. The M=16/32 changes, however, were large. For M=256, the added split-K work clearly lost to native matmul.
 
-**Current hybrid experiment:** Retain fused router for M=9–255 but restore native high/low `torch.mm` for M>=256. Both math paths have passed official correctness tests separately, but their combination has **not** been officially checked. The prior best 1.044x feature branch and earlier fused-router commit remain available.
-
-A replay using the displayed, rounded per-case timings predicts approximately **1.072x** total speedup with the M=256 router reduced to its previous ~17.5 µs; this is a mathematical counterfactual, **not a GPU measurement or guaranteed gain**. The true result may differ because every official run samples timing independently.
+**Hybrid result (owner-reported official check):** The M=9–255 fused path plus M>=256 native fallback passed all **9/9 official correctness tests** in job `1b6a10d0c8f84b6b` and scored **1.089x**, 95% CI **1.072–1.105x**, time **4,437.5 µs**. M16 router was 7.4 µs (2.043x) and M32 was 9.7 µs (1.579x); M256 recovered to 17.6 µs (1.003x). The prediction from the previous experiment was only a forecast and has now been superseded by this measured result. The official profiler for this new run remains on the owner's VPS.
 
 ## Validation gates
 

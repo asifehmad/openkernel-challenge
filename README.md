@@ -1,17 +1,18 @@
 # Muse BF16 projection — H200 development
 
-Independent initial candidate for `muse_bf16_proj`, targeting the Muse Spark Open
-Kernel Challenge. **Both official off-board GPU checks passed all 9 tests.** The router fix
-improved from 0.772x (6,253.9 µs) to **0.979x (4,934.9 µs)**. A follow-up
-BF16 small-M matmul experiment is unverified. No leaderboard submission made.
+Independent kernel candidate for `muse_bf16_proj`, targeting the Muse Spark Open
+Kernel Challenge. **Best verified official off-board result: 1.089x speedup,
+4,437.5 µs, all nine correctness tests passed** (job `1b6a10d0c8f84b6b`).
+The hybrid router keeps fused split-K at M=9–255 and uses native hi/lo matmul
+at M>=256. No leaderboard submission has been made.
 
 | Metric | Result |
 | --- | --- |
 | Official baseline | 4.8308 ms in a public October 24 API snapshot; live unverified |
 | Current leaderboard target | 2.93 ms user-supplied target; live rank unverified |
-| Latest official-check latency | 4.9349 ms (job `b9558e1c1e85451c`) |
-| Latest official-check speedup | 0.979x; 95% 0.964–0.994x |
-| GPU correctness | Router-fallback revision: 9/9 passed; current BF16 experiment: untested |
+| Best official-check latency | 4.4375 ms (job `1b6a10d0c8f84b6b`) |
+| Best official-check speedup | 1.089x; 95% 1.072–1.105x |
+| GPU correctness | Best current candidate: 9/9 passed in official check |
 | Submission readiness | Not ready |
 
 The immediate objective is <2.93 ms, with ≤2.5 ms as a stretch target. These
@@ -23,13 +24,13 @@ speedups**, not an arithmetic average of per-shape speedups.
 - `muse_bf16_proj/submission.py`: single-file independent candidate. Weight-only
   preparation, fresh outputs, public shape dispatch, Triton GEMV/split-K GEMM,
   exact FP32 GEMV or permitted BF16 hi+lo router, and PyTorch GEMM for larger BF16
-  shapes. The routes are experimental until H200 measurement.
+  shapes. The active paths have passed an official H200 check; individual optimization choices still need profiling.
 - `muse_bf16_proj/{TASK.md,AGENTS.md,baseline.py,reference.py,checks.py}`:
-  **unchanged secondary-source task snapshot**, corroborated across two public
-  repositories. See [provenance](muse_bf16_proj/PROVENANCE.json) and retained
-  [license](third_party/okc_snapshot/LICENSE). The live official site was blocked
-  by the cloud proxy. These files must be reconciled with the current official
-  bundle before competition readiness. No competitor kernel code was copied.
+  **byte-for-byte matched** against the owner's authenticated `okc 0.7.2 init`
+  download on the VPS (all five task/agent/baseline/reference/check SHA256).
+  See [contract](docs/contract.md) and [provenance](muse_bf16_proj/PROVENANCE.json).
+  The original cloud agent could not access the official site, but the VPS
+  comparison resolved the file-identity uncertainty. No competitor code was copied.
 - `benchmarks/`: local graph timing, strict scoring and CSV/JSON/Markdown reports.
 - `scripts/`: setup, environment checks, correctness and offline compilation.
 - `docs/`: [contract](docs/contract.md), [research](docs/research.md),
@@ -100,25 +101,32 @@ The next readiness update adds [Hostinger CLI instructions](docs/hostinger.md),
 bundle-layout discovery, a one-configuration GPU smoke stage, and independent
 candidate runs with retained source/task artifacts. GPU setup now installs
 nothing into the evaluation image. Latest local checks: **34 passed, 3 skipped**
-and **200 reduced CPU cases passed**; the previous 56-specialization offline
-result remains applicable because submission.py is unchanged. No GPU result
-has been produced. See [readiness update](docs/h200_preflight.md).
+and **200 reduced CPU cases passed** in that earlier local development session.
+Those historical CPU/compiler results are distinct from subsequent official GPU
+checks. See [readiness update](docs/h200_preflight.md).
 
-## First official off-board GPU result
+## Official check progress
 
-Official `okc check` job `9ea7b5b7bf0f43ec` passed 9/9 but was slow: 0.772x,
-6,253.9 µs. Router regressions M>8 were fixed in job `b9558e1c1e85451c`:
-**9/9 passed, 0.979x, 4,934.9 µs**. The next experiment replaces split-K BF16
-M=8/16/32 with native matmul, while preserving the validated router paths.
-**This new BF16 experiment is not yet officially tested.**
-See [check summary](docs/official_checks.md).
+| Job | Correctness | Speedup | Time |
+| --- | --- | ---: | ---: |
+| `9ea7b5b7bf0f43ec` | 9/9 | 0.772x | 6,253.9 µs |
+| `b9558e1c1e85451c` | 9/9 | 0.979x | 4,934.9 µs |
+| `1e9be7af4434464b` | 9/9 | 1.044x | 4,625.7 µs |
+| `74d4ff146a4744f7` | 9/9 | 0.932x | 5,185.0 µs (rejected branch) |
+| `cdea2227f2654a1f` | 9/9 | 1.053x | 4,587.3 µs |
+| **`1b6a10d0c8f84b6b`** | **9/9** | **1.089x** | **4,437.5 µs** |
+
+The 1.089x candidate is the best verified. Its score CI is 1.072–1.105x.
+The current target reported by the owner is a leaderboard leader at 1.60x.
+See [latest official check](docs/official_check_07.md) and [experiment log](docs/experiments.md).
+Do not present off-board checks as leaderboard submissions.
 
 ## Current limitations
 
-No H200, driver, CUDA runtime or SGLang execution is available here. No GPU
-latencies, register counts, occupancy or tensor-core utilization are claimed.
-The official site's indexed rules and problem description were independently reviewed on 2026-10-31; see [official website cross-check](docs/official_web_crosscheck.md). Direct live task/API and CLI access, authenticated task hashes, current leaderboard and GPU correctness remain unverified.
-The project is prepared for experiments; the fastest valid dispatch is still
-to be selected from measurements. Raw results, compiled artifacts, credentials
+The local development environment still lacks an H200 for controlled profiling,
+but the official remote GPU checker has measured the candidate repeatedly.
+The task files have been verified against the owner's authenticated official CLI.
+Current leaderboard rank and detailed GPU occupancy are not independently known.
+The project's best observed dispatch is selected using off-board checks. Raw results, compiled artifacts, credentials
 and weights are ignored by Git. Existing cloud checkouts are isolated already;
 use the checkout directly, with no worktree unless explicitly requested.

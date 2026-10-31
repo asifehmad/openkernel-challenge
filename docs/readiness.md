@@ -1,21 +1,24 @@
 # Submission readiness
 
-**Status: not ready for competition submission.** The router-fallback revision passed all 9 official correctness tests in off-board job `b9558e1c1e85451c` (0.979x; 4,934.9 µs). The new BF16 small-M native-matmul revision remains untested. Local H200 profiling and live website-only limits remain open. No leaderboard submission has been authorized.
+**Status: best verified candidate, not yet a leaderboard submission.** The owner's latest off-board official check `1b6a10d0c8f84b6b` passed 9/9 correctness and scored 1.089x (4,437.5 µs; 95% CI 1.072–1.105x). Its hybrid router revision is promoted unchanged. Local H200 profiling, wider unseen-seed stress checks and current website-only limits remain outstanding. No leaderboard submission has been authorized.
 
 | Metric | Result |
 |---|---|
 | Official baseline | 4.83 ms — user-supplied target; historical mirror records 4830.8 µs; not live-verified |
 | Current leaderboard target | 2.93 ms — user-supplied target; current leaderboard unverified |
-| Latest official-check latency | 4,934.9 µs (job `b9558e1c1e85451c`) |
-| Latest official-check speedup | 0.979x (95% 0.964–0.994x) |
-| Correctness | Router-fallback revision: 9/9 passed; current BF16 experiment: untested |
+| Best official-check latency | 4,437.5 µs (job `1b6a10d0c8f84b6b`) |
+| Best official-check speedup | 1.089x (95% CI 1.072–1.105x) |
+| Correctness | 9/9 official tests passed for current `submission.py` |
 | Submission readiness | Not ready |
 
 ## First official check
 
 - [x] Official off-board GPU check job `9ea7b5b7bf0f43ec` passed 9/9 (0.772x; 6,253.9 µs).
 - [x] Official off-board GPU check job `b9558e1c1e85451c` passed 9/9 (0.979x; 4,934.9 µs).
-- [ ] Run a new authorized `okc check` for the BF16 small-M native matmul revision; compare all 30 timings.
+- [x] BF16 native matmul revision: official check `1e9be7af4434464b`, 9/9, 1.044x.
+- [x] Fused router trial: official check `cdea2227f2654a1f`, 9/9, 1.053x (M256 regressed).
+- [x] Hybrid router: official check `1b6a10d0c8f84b6b`, 9/9, 1.089x (best verified).
+- [ ] Run new tests only after a new experimental change, not as a substitute for local profiling.
 - [ ] Review and retain non-secret profile/log/JSON artifacts on VPS.
 
 ## Before H200 measurements
