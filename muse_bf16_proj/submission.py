@@ -1,11 +1,10 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Hybrid split-K/router experiment, building on official check cdea2227.
+"""Experimental large-router tile dispatch based on verified 1.089x.
 
-The prior fused-router revision passed 9/9 at 1.053x, 4,587.3 us.
-It won for router M=16/32 but regressed badly at M=256.
-This revision restores the tested native hi/lo path at M>=256 only;
-it is not yet GPU-checked. All BF16 routes remain unchanged.
+Parent f406563 passed 9/9 official checks (job 1b6a10d0c8f84b6b).
+This branch tries BM=32, split-K=8 for router M=128 and M=256;
+all other routes keep the verified settings. This candidate is untested.
 """
 from typing import Any, TypedDict
 
@@ -222,23 +221,20 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
     if layer == "router" and m == 1:
         return F.linear(x.float(), w[:n])
     if layer == "router" and m > 8:
-        if small_m_strategy == "default" and m < 256:
-            # Official job cdea2227: fused split-K router was 2.109x at
-            # M=16, 1.600x at M=32, ~1.0x at M=128, but only 0.609x
-            # at M=256. Revert only the regressing large-M shape to
-            # the previously validated native high/low matmul below.
-            # Hopper parallelism for K=8192 with few router output rows:
-            # one CTA per output tile alone leaves most SMs unused. Splitting
-            # K exposes more CTAs without launching two separate GEMMs.
-            # Preserve the validated native route in explicit alternative
-            # entry points for comparison with this unverified experiment.
-            split = 16 if m <= 16 else 8 if m <= 32 else 4 if m <= 128 else 2
+        if small_m_strategy == "default" and m <= 256:
+            # Shape-only experiment: keep the verified fused routing for
+            # M=9..127 and change ONLY M=128 and M=256.
+            # Larger M tiles reuse each weight across twice as many rows;
+            # additional K partitions reduce work per CTA. This may help
+            # the cold-L2 bottleneck, but requires a real H200 check.
+            bm = 32 if m >= 128 else 16
+            split = 16 if m <= 16 else 8 if m <= 32 or m >= 128 else 4
             partial = torch.empty((split, m, n), device=x.device, dtype=torch.float32)
             out = torch.empty((m, n), device=x.device, dtype=torch.float32)
-            _router_pair_split[(triton.cdiv(m, 16), triton.cdiv(n, 32), split)](
+            _router_pair_split[(triton.cdiv(m, bm), triton.cdiv(n, 32), split)](
                 x, state["router_hi"], state["router_lo"], partial,
                 m, n, k, x.stride(0), x.stride(1),
-                BM=16, BN=32, BK=64, SPLIT=split, num_warps=4)
+                BM=bm, BN=32, BK=64, SPLIT=split, num_warps=4)
             _finish_split[(triton.cdiv(m * n, 256),)](
                 partial, out, m * n, split, B=256, num_warps=4)
             return out
@@ -286,7 +282,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Hybrid split-K router (M<256) + native fallback; GPU check pending."""
+    """Experimental router tile for M=128/256; official recheck required."""
     return _dispatch(data, state, "default")
 
 
