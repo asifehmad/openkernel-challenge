@@ -1,10 +1,10 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Official check b9558e1c passed 9/9 at 0.979x (4,934.9 us).
+"""Experiment: fused hi+lo router with parallel split-K and FP32 reduction.
 
-This unverified revision removes the default BF16 split-K path at M=8/16/32,
-using native matmul instead. It preserves the proven router and M=1 paths,
-and the alternative Triton kernels for further GPU comparison.
+Verified parent ced1acb scored 1.044x, 9/9 correct in official check
+1e9be7af4434464b. This experimental router has not been GPU-tested.
+Baseline-equivalent router is retained in explicit alternative entry points.
 """
 from typing import Any, TypedDict
 
@@ -108,6 +108,36 @@ if triton is not None:
         tl.store(Y + i, acc, i < SIZE)
 
     @triton.jit
+    def _router_pair_split(X, HI, LO, P,
+                           M: tl.constexpr, N: tl.constexpr, K: tl.constexpr,
+                           XM: tl.constexpr, XK: tl.constexpr,
+                           BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr,
+                           SPLIT: tl.constexpr):
+        # Split long K across CTAs. Both BF16 hi and BF16 lo are consumed in
+        # the same launch, with separate FP32 dot accumulators and no input
+        # reads on the CPU. Scratch is FP32 and reduced in one second launch.
+        mi = tl.program_id(0) * BM + tl.arange(0, BM)
+        ni = tl.program_id(1) * BN + tl.arange(0, BN)
+        part = tl.program_id(2)
+        kk = tl.arange(0, BK)
+        hi_acc = tl.full((BM, BN), 0, tl.float32)
+        lo_acc = tl.full((BM, BN), 0, tl.float32)
+        for chunk in range(tl.cdiv(K, BK * SPLIT)):
+            k = (chunk * SPLIT + part) * BK + kk
+            a = tl.load(X + mi[:, None] * XM + k[None, :] * XK,
+                        (mi[:, None] < M) & (k[None, :] < K), 0)
+            offsets = ni[None, :] * K + k[:, None]
+            mask = (ni[None, :] < N) & (k[:, None] < K)
+            hi = tl.load(HI + offsets, mask, 0)
+            lo = tl.load(LO + offsets, mask, 0)
+            hi_acc = tl.dot(a, hi, hi_acc)
+            lo_acc = tl.dot(a, lo, lo_acc)
+        tl.store(P + part * M * N + mi[:, None] * N + ni[None, :],
+                 hi_acc + lo_acc,
+                 (mi[:, None] < M) & (ni[None, :] < N))
+
+
+    @triton.jit
     def _router_pair(X, HI, LO, Y, M: tl.constexpr, N: tl.constexpr, K: tl.constexpr,
                      XM: tl.constexpr, XK: tl.constexpr,
                      BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
@@ -191,6 +221,22 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
     if layer == "router" and m == 1:
         return F.linear(x.float(), w[:n])
     if layer == "router" and m > 8:
+        if small_m_strategy == "default":
+            # Hopper parallelism for K=8192 with few router output rows:
+            # one CTA per output tile alone leaves most SMs unused. Splitting
+            # K exposes more CTAs without launching two separate GEMMs.
+            # Preserve the validated native route in explicit alternative
+            # entry points for comparison with this unverified experiment.
+            split = 16 if m <= 16 else 8 if m <= 32 else 4 if m <= 128 else 2
+            partial = torch.empty((split, m, n), device=x.device, dtype=torch.float32)
+            out = torch.empty((m, n), device=x.device, dtype=torch.float32)
+            _router_pair_split[(triton.cdiv(m, 16), triton.cdiv(n, 32), split)](
+                x, state["router_hi"], state["router_lo"], partial,
+                m, n, k, x.stride(0), x.stride(1),
+                BM=16, BN=32, BK=64, SPLIT=split, num_warps=4)
+            _finish_split[(triton.cdiv(m * n, 256),)](
+                partial, out, m * n, split, B=256, num_warps=4)
+            return out
         acc = torch.mm(x, state["router_hi_t"][:, :n], out_dtype=torch.float32)
         acc += torch.mm(x, state["router_lo_t"][:, :n], out_dtype=torch.float32)
         return acc
@@ -235,7 +281,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Second post-check BF16 small-M experiment; requires official recheck."""
+    """Experimental split-K fused router; official check required."""
     return _dispatch(data, state, "default")
 
 
