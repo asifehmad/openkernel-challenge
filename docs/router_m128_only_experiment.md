@@ -1,6 +1,6 @@
 # Router M=128-only: measured winner plus validated fallback
 
-**Status: untested combined candidate.** This experiment is based on the large-tile branch commit `1b54a13d1f4d640c080cbf6c1f2a36ec0b566c47` and preserves the latest verified stable candidate on `feat/muse-bf16-proj` (commit `f406563399c647c30fb6c62f2040c4bb71c1e21b`).
+**Status: official 9/9 correctness passed; 1.086x nominally below stable 1.089x.** This experiment is based on the large-tile branch commit `1b54a13d1f4d640c080cbf6c1f2a36ec0b566c47` and preserves the latest verified stable candidate on `feat/muse-bf16-proj` (commit `f406563399c647c30fb6c62f2040c4bb71c1e21b`).
 
 ## What the official checks found
 
@@ -23,6 +23,14 @@ For router only:
 - M>=256: **native high/low BF16 GEMM with FP32 accumulation**, restored to stable dispatch.
 
 All BF16 projection routes are exactly as in the stable checkpoint. No input-dependent routing; no caching; every result uses current activations. M=128 and M>=256 have individually passed 9 official correctness tests in prior source revisions, but **this combination has not**.
+
+## Official result: job `3cecb11c38704af0`
+
+The owner ran an authenticated off-board `okc check` on this M128-only hybrid. **All nine correctness tests passed**, with **1.086x overall speedup** (95% interval **1.070–1.103x**) and **4,446.5 µs** estimated time. Job ran 0:48 and queued 0:09. The CLI reported **16 of 20** check runs left and **10 of 10** leaderboard submissions left in the day's window.
+
+The targeted router M128 improved to **13.0 µs** (from 16.45 µs on the stable 1.089x check), and native M256 recovered to **17.3 µs** (vs 17.58 µs on the stable check). Despite that per-shape success, the whole-run score was **1.086x**, nominally below the still-best **1.089x** checkpoint; the intervals overlap, so this difference is inconclusive. **Do not promote on the aggregate result** without repeated evidence. Archive this as a successful M128 micro-optimization but an inconclusive overall optimization.
+
+Profile: `muse_bf16_proj/profiles/submission.3cecb11c38704af0.txt` and corresponding `.json/.log` on VPS. Source branch commit `d7dc6aad651a15fe1f22922ef6554d9cb999c5ce`, exact file digest not independently tied to remote record.
 
 ## Next gate
 
