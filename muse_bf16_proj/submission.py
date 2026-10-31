@@ -1,11 +1,11 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Experimental FlashInfer TinyGEMM for BF16 QKV/pooler at M=1 and M=8.
+"""FlashInfer TinyGEMM trial only for pooler M=8 (verify 1).
 
-Based on official 9/9 checkpoint 5fbcf345f0454920 (1.117x, 4324.7us).
-The SM90 TinyGEMM implementation uses original contiguous BF16 weights
-with FP32 tensor-core accumulation; no quantization or repacking is needed.
-Router and all other paths are unchanged. THIS VERSION IS UNVERIFIED.
+Job 96941f1938bc4ef4 measured TinyGEMM pooler M=8 at 19.5 us
+vs 21.5 us on verified 1.117x feature source. TinyGEMM was slower
+for QKV M=1/8 and pooler M=1, so those routes are restored.
+This hybrid candidate is NOT YET officially GPU-verified.
 """
 from typing import Any, TypedDict
 
@@ -256,12 +256,12 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
         acc = torch.mm(x, state["router_hi_t"][:, :n], out_dtype=torch.float32)
         acc += torch.mm(x, state["router_lo_t"][:, :n], out_dtype=torch.float32)
         return acc
-    # SM90 latency-optimized warp-specialized tiny GEMM. Preallocated out,
-    # same exact original BF16 row-major weights and BF16 activations. The
-    # documented API supports M<=8 ideally, K divisible by 64, N by 16.
-    # No input values, harness state or hidden global flags affect dispatch.
-    if (small_m_strategy == "default" and layer in ("qkv_gate", "pooler")
-            and m in (1, 8) and state.get("_tinygemm_bf16") is not None):
+    # Official check 96941f1938bc4ef4: pooler M=8 was the sole
+    # substantive TinyGEMM winner (~19.5 us vs ~21.5 us original).
+    # Limit the new route to that public layer/shape only. This branch
+    # still needs its own correctness/performance check before promotion.
+    if (small_m_strategy == "default" and layer == "pooler"
+            and m == 8 and state.get("_tinygemm_bf16") is not None):
         out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
         state["_tinygemm_bf16"](x.contiguous(), w[:n].contiguous(), out)
         return out
@@ -306,7 +306,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Experimental TinyGEMM QKV/pooler route; official check required."""
+    """Pooler M=8 TinyGEMM hybrid; official check required."""
     return _dispatch(data, state, "default")
 
 
