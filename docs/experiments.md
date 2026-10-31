@@ -1,6 +1,6 @@
 # Experiment log
 
-Official off-board checks `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs) and `b9558e1c1e85451c` (0.979x; 4,934.9 µs) each passed 9/9. The new BF16 small-M native matmul experiment is unverified; see [check evidence](official_checks.md). `TBD` means unmeasured, not zero.
+Official off-board jobs `9ea7b5b7bf0f43ec` (0.772x), `b9558e1c1e85451c` (0.979x), `1e9be7af4434464b` (1.044x), and `cdea2227f2654a1f` (1.053x) each passed **9/9**. The *hybrid M>=256 native fallback* has not been officially tested. `TBD` means unmeasured, not zero.
 
 | ID | Hypothesis / scope | Change | Correctness evidence | Previous latency | New latency | Aggregate effect | Decision |
 |---|---|---|---|---|---|---|---|
@@ -14,6 +14,11 @@ Official off-board checks `9ea7b5b7bf0f43ec` (0.772x; 6,253.9 µs) and `b9558e1c
 | A006 | Official check of initial candidate | Original GEMV/split-K/custom-router dispatch | 9/9 official tests passed, job `9ea7b5b7bf0f43ec` | SGLang 4,830.8 µs historical baseline | 6,253.9 µs | 0.772x (95% 0.761–0.784x) | Identify router M>8 regression (~51 µs each); fix first |
 | A007 | Replace regressed router paths while keeping M=8 win | FP32 `F.linear` for M=1; native BF16 high/low matmul for M>8; keep custom M=8 GEMV | 9/9 official tests passed, job `b9558e1c1e85451c` | Previous run 6,253.9 µs | 4,934.9 µs | 0.979x overall; 21.1% lower candidate latency | Retain router changes |
 | A008 | Eliminate BF16 split-K overhead for M=8/16/32 | Default route uses native PyTorch BF16 matmul at 8<=M<=32; M=1 custom GEMV and router unchanged | Not yet tested; existing M>32 native matmul passed 9/9 in earlier run | 4,934.9 µs | TBD | TBD | One-factor experiment: rerun official check; revert if slower or incorrect |
+
+| A008 | Native BF16 matmul replaces custom split-K at M=8/16/32 | Default uses native PyTorch BF16 matmul, preserving M=1 GEMV | Official check `1e9be7af4434464b`: 9/9 | 4,934.9 µs | 4,625.7 µs | 1.044x | Preserve verified feature-branch checkpoint `ced1acb` |
+| A009 | Narrow single-pass BF16 GEMM for M=16/32 | Reuse `_single_gemm` with `BM=M, BN=16, BK=128` | Official check `74d4ff146a4744f7`: 9/9 | 4,625.7 µs | 5,185.0 µs | 0.932x | Rejected; separate experiment branch |
+| A010 | Fuse router high/low BF16 matmul with parallel split-K | `_router_pair_split`, split 16/8/4/2 by M, FP32 reduction | Official check `cdea2227f2654a1f`: 9/9 | 4,625.7 µs | 4,587.3 µs | 1.053x (95% CI 1.037–1.069x) | M16=2.109x and M32=1.600x; M256=0.609x regression |
+| A011 | Hybrid router dispatch for M>=256 | Retain successful fused M16/M32, restore native BF16 high/low router at M>=256 | NOT yet checked; each separate route previously passed | 4,587.3 µs | TBD | Predict ~1.072x from rounded case timings only | Validate via official check; keep only if correct and faster |
 
 Initial candidate milestone: `116d64f`. See [validation record](validation.md) for
 commands, environment and the interpreter limitation. A static or CPU-only pass

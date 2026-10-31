@@ -1,10 +1,11 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Experiment: fused hi+lo router with parallel split-K and FP32 reduction.
+"""Hybrid split-K/router experiment, building on official check cdea2227.
 
-Verified parent ced1acb scored 1.044x, 9/9 correct in official check
-1e9be7af4434464b. This experimental router has not been GPU-tested.
-Baseline-equivalent router is retained in explicit alternative entry points.
+The prior fused-router revision passed 9/9 at 1.053x, 4,587.3 us.
+It won for router M=16/32 but regressed badly at M=256.
+This revision restores the tested native hi/lo path at M>=256 only;
+it is not yet GPU-checked. All BF16 routes remain unchanged.
 """
 from typing import Any, TypedDict
 
@@ -221,7 +222,11 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
     if layer == "router" and m == 1:
         return F.linear(x.float(), w[:n])
     if layer == "router" and m > 8:
-        if small_m_strategy == "default":
+        if small_m_strategy == "default" and m < 256:
+            # Official job cdea2227: fused split-K router was 2.109x at
+            # M=16, 1.600x at M=32, ~1.0x at M=128, but only 0.609x
+            # at M=256. Revert only the regressing large-M shape to
+            # the previously validated native high/low matmul below.
             # Hopper parallelism for K=8192 with few router output rows:
             # one CTA per output tile alone leaves most SMs unused. Splitting
             # K exposes more CTAs without launching two separate GEMMs.
@@ -281,7 +286,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Experimental split-K fused router; official check required."""
+    """Hybrid split-K router (M<256) + native fallback; GPU check pending."""
     return _dispatch(data, state, "default")
 
 

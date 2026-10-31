@@ -1,6 +1,6 @@
 # Profile-driven router split-K experiment
 
-**Status: untested.** This branch is based on the verified `feat/muse-bf16-proj` commit `ced1acb496f2ee25882e2254c5df2cbb1f32fac0`, which passed the official `okc check` 9/9 at **1.044x (4,625.7 µs)**, job `1e9be7af4434464b`.
+**Status: first fused router revision was verified at 1.053x, 9/9 correct; the new hybrid fallback remains untested.** This branch is based on the verified `feat/muse-bf16-proj` commit `ced1acb496f2ee25882e2254c5df2cbb1f32fac0`, which passed the official `okc check` 9/9 at **1.044x (4,625.7 µs)**, job `1e9be7af4434464b`.
 
 ## Evidence from official profile
 
@@ -26,9 +26,28 @@ The old custom `_router_pair` fused hi+lo arithmetic but under-parallelized the 
 | 9 or 16 | 16 | 128 |
 | 32 | 8 | 128 |
 | 128 | 4 | 256 |
-| 256 | 2 | 256 |
+| 256 | 2 (initial experiment; native fallback in hybrid) | 256 (initial experiment only) |
 
 Tile configuration `BM=16, BN=32, BK=64`, four warps. This maintains the old unmodified M=1 FP32 `F.linear`, M=8 Triton GEMV, all BF16 projection routes and M>32 fallback. Only the default router path for M>8 is modified; local `single_pass_kernel_fn` and `gemv_kernel_fn` retain the proven native high/low router path as controls.
+
+## Official fused-router check: job `cdea2227f2654a1f`
+
+The owner ran `okc check` on the initial fused split-K router revision (commit `c2b0cf020c68b8e684fcd0256e13337c13d8c240`). All **9/9 correctness tests passed**. Overall speedup was **1.053x**, CI **1.037–1.069x**, time **4,587.3 µs**. The check was off-board, with 19/20 checks remaining in the owner's reported daily window.
+
+| Router case | SGLang µs | Fused router µs | Ratio |
+| --- | ---: | ---: | ---: |
+| M=1 | 10.3 | 10.4 | 0.990x |
+| M=8 | 26.3 | 16.4 | 1.602x |
+| M=16 | 14.9 | 7.1 | **2.109x** |
+| M=32 | 15.4 | 9.6 | **1.600x** |
+| M=128 | 16.5 | 16.5 | 0.997x |
+| M=256 | 17.5 | 28.7 | **0.609x** |
+
+The whole-run improvement from 1.044x to 1.053x is smaller than the stated run-level confidence bounds; it is not evidence that the whole-run speedup is reliably higher. The M=16/32 changes, however, were large. For M=256, the added split-K work clearly lost to native matmul.
+
+**Current hybrid experiment:** Retain fused router for M=9–255 but restore native high/low `torch.mm` for M>=256. Both math paths have passed official correctness tests separately, but their combination has **not** been officially checked. The prior best 1.044x feature branch and earlier fused-router commit remain available.
+
+A replay using the displayed, rounded per-case timings predicts approximately **1.072x** total speedup with the M=256 router reduced to its previous ~17.5 µs; this is a mathematical counterfactual, **not a GPU measurement or guaranteed gain**. The true result may differ because every official run samples timing independently.
 
 ## Validation gates
 
