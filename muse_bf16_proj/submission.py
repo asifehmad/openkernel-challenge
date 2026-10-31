@@ -1,11 +1,10 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Hybrid split-K/router experiment, building on official check cdea2227.
+"""BF16 split-K experiment on top of verified 1.089x hybrid-router source.
 
-The prior fused-router revision passed 9/9 at 1.053x, 4,587.3 us.
-It won for router M=16/32 but regressed badly at M=256.
-This revision restores the tested native hi/lo path at M>=256 only;
-it is not yet GPU-checked. All BF16 routes remain unchanged.
+Official job 1b6a10d0 passed 9/9. This unverified branch changes only
+BF16 pooler and qkv_gate M=16/32, using split-K with larger parallel
+reduction and existing float32 partials; router and all other paths stay.
 """
 from typing import Any, TypedDict
 
@@ -267,6 +266,20 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
         # This is a performance hypothesis; measure on the official H200.
         # The split-K code remains available to explicit experimental dispatch.
         if small_m_strategy == "default":
+            if layer in ("qkv_gate", "pooler") and m in (16, 32):
+                # Two launches, larger split-K grid for the long K=8192:
+                # exploit more SMs and reduce per-CTA K work, at the cost
+                # of scratch traffic. Not guaranteed to win over cuBLAS.
+                split = 16
+                partial = torch.empty((split, m, n), device=x.device, dtype=torch.float32)
+                out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
+                _split_gemm[(triton.cdiv(m, 16), triton.cdiv(n, 64), split)](
+                    x, w, partial, m, n, k, x.stride(0), x.stride(1),
+                    w.stride(0), w.stride(1),
+                    BM=16, BN=64, BK=64, SPLIT=split, num_warps=4)
+                _finish_split[(triton.cdiv(m * n, 256),)](
+                    partial, out, m * n, split, B=256, num_warps=4)
+                return out
             return x @ w[:n].T
         if small_m_strategy == "single_pass":
             out = torch.empty((m, n), device=x.device, dtype=torch.bfloat16)
@@ -286,7 +299,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Hybrid split-K router (M<256) + native fallback; GPU check pending."""
+    """Officially verified router with unverified BF16 high-split experiment."""
     return _dispatch(data, state, "default")
 
 
