@@ -1,11 +1,12 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Experiment: use the fused BF16 hi/lo split-K router for M<=8.
+"""Experimental CUDA WMMA micro-GEMM for BF16 QKV/pooler, M=1/8/16/32.
 
-The source checkpoint (f406563) passed 9/9 at 1.089x and 4,437.5 us.
-This unverified revision replaces only FP32 F.linear (M=1) and the
-FP32 streaming GEMV (M=2..8) with the proven M=9..16 fused router
-architecture. All BF16 paths and all router M>8 paths remain unchanged.
+Verified parent 4f36b51 passed official 9/9 at 1.117x, 4,324.7 us.
+The new weight layout is a LOSSLESS BF16 16x16 transpose within each
+tile, created only in untimed prepare(). CUDA tensor cores accumulate
+FP32 partials; router and other BF16 paths remain identical to parent.
+This branch has not passed an official GPU check and may be slower.
 """
 from typing import Any, TypedDict
 
@@ -161,6 +162,153 @@ if triton is not None:
                  (mi[:, None] < M) & (ni[None, :] < N))
 
 
+
+# CUDA WMMA implementation stays inside this ONE submission file. The official
+# rules allow native CUDA built during untimed prepare(); no external source
+# files or dependencies are accessed. This implementation is original and
+# uses NVIDIA's public 16x16x16 WMMA programming model.
+_CPP_WMMA_SOURCE = r"""
+torch::Tensor bf16_wmma_cuda(torch::Tensor x, torch::Tensor packed, int64_t splits);
+"""
+
+_CUDA_WMMA_SOURCE = r"""
+#include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAException.h>
+#include <cuda_bf16.h>
+#include <mma.h>
+#include <cstdint>
+
+namespace {
+namespace wmma = nvcuda::wmma;
+
+// Packed weights are [ceil(N/16), K/16, 16, 16], exactly BF16.
+// Within one 16x16 tile, the last two dimensions are (k_inner, n_inner).
+// Every block streams a contiguous set of 512-byte weight fragments.
+// A CTA (one warp) computes one 16x16 output tile and one K partition.
+__global__ void wmma_project(
+    const __nv_bfloat16* __restrict__ x,
+    const __nv_bfloat16* __restrict__ packed,
+    float* __restrict__ partial,
+    int M, int N, int K, int splits
+) {
+    const int tid = threadIdx.x;
+    const int nm = blockIdx.y * 16;
+    const int nn = blockIdx.x * 16;
+    const int part = blockIdx.z;
+    const int k_first = part * (K / splits);
+    const int k_last = k_first + (K / splits);
+    __shared__ __align__(16) __nv_bfloat16 a_s[256];
+    __shared__ __align__(16) __nv_bfloat16 b_s[256];
+    __shared__ __align__(16) float c_s[256];
+
+    wmma::fragment<wmma::matrix_a, 16, 16, 16,
+                   wmma::precision::bfloat16, wmma::row_major> af;
+    wmma::fragment<wmma::matrix_b, 16, 16, 16,
+                   wmma::precision::bfloat16, wmma::row_major> bf;
+    wmma::fragment<wmma::accumulator, 16, 16, 16, float> cf;
+    wmma::fill_fragment(cf, 0.f);
+
+    for (int kk = k_first; kk < k_last; kk += 16) {
+        const __nv_bfloat16* wt = packed +
+            ((nn / 16) * (K / 16) + (kk / 16)) * 256;
+        #pragma unroll
+        for (int i = tid; i < 256; i += 32) {
+            int row = i / 16, col = i % 16;
+            a_s[i] = (nm + row < M)
+                ? x[(nm + row) * K + kk + col]
+                : __float2bfloat16(0.f);
+            b_s[i] = wt[i];
+        }
+        __syncwarp();
+        wmma::load_matrix_sync(af, a_s, 16);
+        wmma::load_matrix_sync(bf, b_s, 16);
+        wmma::mma_sync(cf, af, bf, cf);
+        __syncwarp();
+    }
+    wmma::store_matrix_sync(c_s, cf, 16, wmma::mem_row_major);
+    __syncwarp();
+    for (int i = tid; i < 256; i += 32) {
+        const int row = nm + i / 16, col = nn + i % 16;
+        if (row < M && col < N) {
+            partial[(part * M + row) * N + col] = c_s[i];
+        }
+    }
+}
+
+__global__ void wmma_finish(
+    const float* __restrict__ partial,
+    __nv_bfloat16* __restrict__ out, int M, int N, int splits
+) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= M * N) return;
+    float acc = 0.f;
+    for (int p = 0; p < splits; ++p) acc += partial[p * M * N + idx];
+    out[idx] = __float2bfloat16_rn(acc);
+}
+}  // namespace
+
+torch::Tensor bf16_wmma_cuda(torch::Tensor x, torch::Tensor packed, int64_t splits) {
+    TORCH_CHECK(x.is_cuda() && packed.is_cuda(), "CUDA tensors required");
+    TORCH_CHECK(x.is_contiguous() && packed.is_contiguous(), "contiguous tensors required");
+    TORCH_CHECK(x.scalar_type() == torch::kBFloat16 &&
+                packed.scalar_type() == torch::kBFloat16, "BF16 required");
+    TORCH_CHECK(x.dim() == 2 && packed.dim() == 4, "wrong rank");
+    const int M = static_cast<int>(x.size(0));
+    const int N = static_cast<int>(packed.size(0) * 16);
+    const int K = static_cast<int>(x.size(1));
+    TORCH_CHECK(packed.size(1) * 16 == K && packed.size(2) == 16 &&
+                packed.size(3) == 16, "invalid tile layout");
+    TORCH_CHECK(splits > 0 && K % (16 * splits) == 0, "invalid split-K");
+    TORCH_CHECK(x.get_device() == packed.get_device(), "different devices");
+    auto partial = torch::empty({splits, M, N}, x.options().dtype(torch::kFloat32));
+    auto out = torch::empty({M, N}, x.options());
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream(x.get_device()).stream();
+    dim3 grid((N + 15) / 16, (M + 15) / 16, static_cast<unsigned>(splits));
+    wmma_project<<<grid, 32, 0, stream>>>(
+        reinterpret_cast<const __nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
+        reinterpret_cast<const __nv_bfloat16*>(packed.data_ptr<at::BFloat16>()),
+        partial.data_ptr<float>(), M, N, K, static_cast<int>(splits));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    wmma_finish<<<(M * N + 255) / 256, 256, 0, stream>>>(
+        partial.data_ptr<float>(),
+        reinterpret_cast<__nv_bfloat16*>(out.data_ptr<at::BFloat16>()),
+        M, N, static_cast<int>(splits));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return out;
+}
+"""
+
+
+def _prepare_wmma(state: dict[str, Any]) -> None:
+    """Compile once and pack only the original BF16 weights, without rounding."""
+    from torch.utils.cpp_extension import load_inline
+
+    # No compilation or host-to-device movement occurs in kernel_fn().
+    state["_bf16_wmma"] = load_inline(
+        name="muse_proj_bf16_wmma16_v1",
+        cpp_sources=_CPP_WMMA_SOURCE,
+        cuda_sources=_CUDA_WMMA_SOURCE,
+        functions=["bf16_wmma_cuda"],
+        extra_cflags=["-O2"],
+        extra_cuda_cflags=["-O3", "-gencode=arch=compute_90,code=sm_90"],
+        verbose=False,
+        with_cuda=True,
+    )
+    for layer in ("qkv_gate", "pooler"):
+        weight = state[layer]  # [N,K], already BF16 and contiguous.
+        n, k = weight.shape
+        if n % 16 or k % 16:
+            raise ValueError("WMMA packed dimensions must be multiples of 16")
+        # [n_tile, n_inner, k_tile, k_inner] ->
+        # [n_tile, k_tile, k_inner, n_inner]. No precision conversion.
+        state[layer + "_wmma16"] = (
+            weight.view(n // 16, 16, k // 16, 16)
+            .permute(0, 2, 3, 1).contiguous()
+        )
+
+
+
 def prepare(weights: Weights) -> dict[str, Any]:
     # Metadata checks only; no reads of tensor contents or host synchronization.
     for layer in ("qkv_gate", "o", "pooler", "unpooler", "router"):
@@ -177,6 +325,8 @@ def prepare(weights: Weights) -> dict[str, Any]:
     # The original row-major hi/lo remain available to _router_pair.
     state["router_hi_t"] = hi.t().contiguous()
     state["router_lo_t"] = state["router_lo"].t().contiguous()
+    if router.is_cuda:
+        _prepare_wmma(state)
     return state
 
 
@@ -246,6 +396,13 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
         acc = torch.mm(x, state["router_hi_t"][:, :n], out_dtype=torch.float32)
         acc += torch.mm(x, state["router_lo_t"][:, :n], out_dtype=torch.float32)
         return acc
+    # Experimental native WMMA for QKV/pooler small batches. The prepared
+    # weights are the exact original BF16 bit patterns in tiled order.
+    # Other projections and all router paths remain the tested dispatch.
+    if (layer in ("qkv_gate", "pooler") and m in (1, 8, 16, 32)
+            and "_bf16_wmma" in state):
+        return state["_bf16_wmma"].bf16_wmma_cuda(
+            x.contiguous(), state[layer + "_wmma16"], 16)
     # Dispatch depends only on public shapes and layer metadata.
     use_gemv = (layer == "router" and m <= 8) or (
         layer != "router" and ((small_m_strategy == "default" and m == 1) or
@@ -287,7 +444,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Experimental fused short-router dispatch; GPU check required."""
+    """WMMA packed-weight micro-GEMM experiment; official GPU check required."""
     return _dispatch(data, state, "default")
 
 
