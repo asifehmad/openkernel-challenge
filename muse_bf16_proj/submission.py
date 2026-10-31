@@ -1,10 +1,11 @@
 # okc: problem=muse_bf16_proj
 # SPDX-License-Identifier: Apache-2.0
-"""Experimental large-router tile dispatch based on verified 1.089x.
+"""Experimental M=128 router tile, restoring validated M=256 fallback.
 
-Parent f406563 passed 9/9 official checks (job 1b6a10d0c8f84b6b).
-This branch tries BM=32, split-K=8 for router M=128 and M=256;
-all other routes keep the verified settings. This candidate is untested.
+Parent f406563 scored 1.089x with 9/9 official checks. Large-tile trial
+29a3b639 passed 9/9 at 1.083x: M=128 improved to 12.8 us, whereas M=256
+regressed to 19.6 us. This hybrid keeps BM32 split-K8 only at M=128.
+Its aggregate correctness and performance remain UNTESTED.
 """
 from typing import Any, TypedDict
 
@@ -221,14 +222,13 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
     if layer == "router" and m == 1:
         return F.linear(x.float(), w[:n])
     if layer == "router" and m > 8:
-        if small_m_strategy == "default" and m <= 256:
-            # Shape-only experiment: keep the verified fused routing for
-            # M=9..127 and change ONLY M=128 and M=256.
-            # Larger M tiles reuse each weight across twice as many rows;
-            # additional K partitions reduce work per CTA. This may help
-            # the cold-L2 bottleneck, but requires a real H200 check.
-            bm = 32 if m >= 128 else 16
-            split = 16 if m <= 16 else 8 if m <= 32 or m >= 128 else 4
+        if small_m_strategy == "default" and m < 256:
+            # Official check 29a3b639: BM32/SPLIT8 improved M=128 from
+            # ~16.45 to 12.8 us, but slowed M=256 from ~17.58 to 19.6 us.
+            # Keep BM32 only for the M=128 route. At M>=256, use the
+            # previously validated native high/low FP32-accumulated GEMMs.
+            bm = 32 if m == 128 else 16
+            split = 16 if m <= 16 else 8 if m <= 32 or m == 128 else 4
             partial = torch.empty((split, m, n), device=x.device, dtype=torch.float32)
             out = torch.empty((m, n), device=x.device, dtype=torch.float32)
             _router_pair_split[(triton.cdiv(m, bm), triton.cdiv(n, 32), split)](
@@ -282,7 +282,7 @@ def _dispatch(data: Inputs, state: dict[str, Any], small_m_strategy: str) -> tor
 
 
 def kernel_fn(data: Inputs, state: dict[str, Any]) -> torch.Tensor:
-    """Experimental router tile for M=128/256; official recheck required."""
+    """M=128-only router tile experiment; official recheck required."""
     return _dispatch(data, state, "default")
 
 
